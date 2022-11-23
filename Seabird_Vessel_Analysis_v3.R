@@ -10,9 +10,8 @@ library(sf)
 # read in just hexagons, drop all attributes except hex ID
 # setwd("/Users/bensullender/Documents/KickstepApproaches_Projects/FWS_AIS/Seabird_Analysis")
 
-hexdir <- "D:/AlaskaConservation_AIS_20210225/Data_Processed_Hex"
-hex <- st_read(paste0(hexdir,"/SpeedHex_2015-01.shp")) %>%
-  select(hexID)
+hexdir <- "E:/AIS_V2_DayNight_60km6hrgap/Hex/"
+hex <- st_read("../Data_Raw/BlankHexes.shp")
 
 # From downloaded NPPSD:
 loc <- read.csv("../Data_Raw/NPPSD_v3.0/tbl_LOCATION.csv")
@@ -28,6 +27,7 @@ hexMask <- st_read("../Data_Raw/hex_x_ocean/hex_x_ocean.shp") %>%
   mutate(AreaKM = c(st_area(.)/1000000)) %>%
   st_drop_geometry()
 
+##############################################################################################################
 # Function to spatially intersect at sea bird observations with vessel traffic hex grid
 # Also calculates survey effort within each hex during the time period 
 # startyr = oldest year of data collection to be included in the analysis
@@ -57,11 +57,7 @@ surveyeffort <- function(loc, dataobs, hex, startyr = 2006, mnths = c(1:12),mnth
   locSF <- st_as_sf(datobs,coords = c("Lon","Lat"),crs=4326) %>%
     st_transform(crs=3338)
   
-  # Now split into 2 time periods: summer = June, July, Aug;
-  #                                 fall = Sept, Oct, Nov
   # Set up one df for bird obs and another df for survey effort
-  
-  
   locIn <- locSF %>%
     filter(Month %in% mnths) %>%
     st_join(hex) %>%
@@ -104,11 +100,14 @@ surveyeffort <- function(loc, dataobs, hex, startyr = 2006, mnths = c(1:12),mnth
 surveyeffort(loc, dataobs, hex, startyr=2006, mnths=c(6,7,8), mnthsname = "Summer")
 surveyeffort(loc, dataobs, hex, startyr=2006, mnths=c(9,10,11), mnthsname = "Fall")
 
+resSumm <- st_read("../Data_Processed/ObsInHexes_Summer.shp")
+resFall<- st_read("../Data_Processed/ObsInHexes_Fall.shp")
+
 ##############################################################################################################
 ##
 ##          Guilding bird spp
 ##
-allSpp <- read.csv("NPPSD_Bird_Codes_Only_Revised.csv")
+allSpp <- read.csv("../Data_Raw/NPPSD_Bird_Codes_Only_Revised.csv")
 totalBirds <- allSpp$Code
 seaducks <- c("WWSC","SUSC","UNSC","BLSC","KIEI","STEI","SPEI","UNEI","LTDU")
 aethia <- c("CRAU","LEAU","PAAU","UNAU","USDA")
@@ -144,188 +143,101 @@ shear <- c("STSH","SOSH","UNSH","UNDS")
 ##      Sample runthrough
 ##
 
-effortThreshold <- c(0.01)
+# Inputs
+# effortThreshold = ???? 
+# mnths = months of observations to be included in the anlaysis
+# taxa = list of 4 digit codes for the groups of seabirds to be included in each analysis 
 
-# First, let's select only hexes with sufficient survey effort and turn observation NAs into 0s
+BirdHexesByEffort <- function(taxaNames = totalBirds, 
+                              taxaLabel = "AllBirds",
+                              res = resSumm, 
+                              hexMask=hexMask, 
+                              effortThreshold = 0.01){
+  
+  # First, let's select only hexes with sufficient survey effort and turn observation NAs into 0s
+  resGuild <- res %>%
+    # join in the actual hex marine area sf
+    left_join(y=hexMask,by="hexID") %>%
+    # and filter by 1% of hex area must be surveyed
+    filter(as.numeric(survEff)>c(effortThreshold*as.numeric(AreaKM)))
+  # switch NAs to 0s
+  resGuild[is.na(resGuild)] <- 0
+  
+  # now for each taxonomic group, create one column with sum of all obs
+  resGuildAll <- resGuild[,c(colnames(resGuild) %in% taxaNames)] %>%
+    st_drop_geometry()
+  resGuild$All <- rowSums(resGuildAll)
+  
+  # Stack just the relevant guilds, remove extraneous columns
+  resStacked <- resGuild %>%
+    select(hexID,All,survEff,AreaKM)
+  
+  resFinal <- resStacked %>%
+    mutate(AllQ = ecdf(All/survEff)(All/survEff))
+  
+  resFinal$Class <- ifelse(c(resFinal$All/resFinal$survEff)<mean(c(resFinal$All/resFinal$survEff)),1,
+         ifelse(c(resFinal$All/resFinal$survEff)>=c(mean(c(resFinal$All/resFinal$survEff))+sd(c(resFinal$All/resFinal$survEff))),3,2))
+  
+  resFinal$taxa <- taxaLabel
+  
+  return(resFinal)
+}
 
-resSummGuild <- resSumm %>%
-  # join in the actual hex marine area sf
-  left_join(y=hexMask,by="hexID") %>%
-  # and filter by 1% of hex area must be surveyed
-  filter(as.numeric(survEff)>c(effortThreshold*as.numeric(AreaKM)))
-# switch NAs to 0s
-resSummGuild[is.na(resSummGuild)] <- 0
-
-resFallGuild <- resFall %>%
-  # join in the actual hex marine area sf
-  left_join(y=hexMask,by="hexID") %>%
-  # and filter by 1% of hex area must be surveyed
-  filter(as.numeric(survEff)>c(effortThreshold*as.numeric(AreaKM)))
-# switch NAs to 0s
-resFallGuild[is.na(resFallGuild)] <- 0
-
-
-# now for each taxonomic group, create one column with sum of all obs
-resSummGuildAll <- resSummGuild[,c(colnames(resSummGuild) %in% totalBirds)] %>%
-  st_drop_geometry()
-resSummGuild$SummAll <- rowSums(resSummGuildAll)
-
-resSummGuildDucks <- resSummGuild[,c(colnames(resSummGuild) %in% seaducks)] %>%
-  st_drop_geometry()
-resSummGuild$SummSeaducks <- rowSums(resSummGuildDucks)
-
-resSummGuildAethia <- resSummGuild[,c(colnames(resSummGuild) %in% aethia)] %>%
-  st_drop_geometry()
-resSummGuild$SummAethia <- rowSums(resSummGuildAethia)
-
-resSummGuildShear <- resSummGuild[,c(colnames(resSummGuild) %in% shear)] %>%
-  st_drop_geometry()
-resSummGuild$SummShear <- rowSums(resSummGuildShear)
-
-
-# Stack just the relevant guilds, remove extraneous columns
-resSummStacked <- resSummGuild %>%
-  select(hexID,SummAll,SummSeaducks,SummAethia,SummShear,survEff,AreaKM)
-
-
-
-# and the same for fall
-resFallGuildAll <- resFallGuild[,c(colnames(resFallGuild) %in% totalBirds)] %>%
-  st_drop_geometry()
-resFallGuild$FallAll <- rowSums(resFallGuildAll)
-
-resFallGuildDucks <- resFallGuild[,c(colnames(resFallGuild) %in% seaducks)] %>%
-  st_drop_geometry()
-resFallGuild$FallSeaducks <- rowSums(resFallGuildDucks)
-
-resFallGuildAethia <- resFallGuild[,c(colnames(resFallGuild) %in% aethia)] %>%
-  st_drop_geometry()
-resFallGuild$FallAethia <- rowSums(resFallGuildAethia)
-
-resFallGuildShear <- resFallGuild[,c(colnames(resFallGuild) %in% shear)] %>%
-  st_drop_geometry()
-resFallGuild$FallShear <- rowSums(resFallGuildShear)
-
-
-# Stack just the relevant guilds, remove extraneous columns
-resFallStacked <- resFallGuild %>%
-  select(hexID,FallAll,FallSeaducks,FallAethia,FallShear,survEff,AreaKM)
-
-
-# Now switch from absolute counts into quantiles of effort-weighted densities
-resFallFinal <- resFallStacked %>%
-  mutate(FallAllQ = ecdf(FallAll/survEff)(FallAll/survEff),
-         FallSeaducksQ = ecdf(FallSeaducks/survEff)(FallSeaducks/survEff),
-         FallAethiaQ = ecdf(FallAethia/survEff)(FallAethia/survEff),
-         FallShearQ = ecdf(FallShear/survEff)(FallShear/survEff))
-
-resSummFinal <- resSummStacked %>%
-  mutate(SummAllQ = ecdf(SummAll/survEff)(SummAll/survEff),
-         SummSeaducksQ = ecdf(SummSeaducks/survEff)(SummSeaducks/survEff),
-         SummAethiaQ = ecdf(SummAethia/survEff)(SummAethia/survEff),
-         SummShearQ = ecdf(SummShear/survEff)(SummShear/survEff))
-
-
+##############################################################################################################
 #
 # Stack Vessel Traffic
 #
 
+hexList <-list.files(hexdir, pattern=".shp")
+
+
+# hexFall <- hexList %>%
+#   filter(c(substr(name,15,16) %in% c("09","10","11")))
+
+# Metric Options
+## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
+## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
 
 
 
-hexList <- as.data.frame(list.files(hexdir, pattern=".shp"))
-names(hexList) <- c("name")
-
-hexSumm <- hexList %>%
-  filter(c(substr(name,15,16) %in% c("06","07","08")))
-
-hexFall <- hexList %>%
-  filter(c(substr(name,15,16) %in% c("09","10","11")))
-
-# h = hex; S = summer; 1 = first in list
-hS1 <- st_read(getwd(),substr(hexSumm[1,1],1,16)) %>%
-  st_drop_geometry()
-hexAll <- hS1
-for (h in 2:nrow(hexSumm)){
-  hSn <- st_read(getwd(),substr(hexSumm[h,1],1,16)) %>%
-    st_drop_geometry()
-  hexAll <- rbind(hexAll,hSn)
+hexStack <- function(filedir = hexList, mnths = c("06", "07", "08"), metric="OperatingDays", night=TRUE){
+  
+  hexSumm <- filedir[substr(filedir,15,16) %in% mnths]
+  
+  # h = hex; S = summer; 1 = first in list
+  temp <- lapply(filenames, function(x){st_read(paste0(filedir,x)) %>% st_drop_geometry()})
+  hexAll <- do.call(rbind, temp)
+  
+  lab <- ifelse(metric=="OperatingDays", "OpD", 
+                ifelse(metric=="Ships","Shp", NA))
+  lab <- ifelse(night==TRUE, paste0("N_",lab),lab)
+  
+  test <- hexAll[,grep(lab, colnames(hexAll))]
+  test$hexID <- hexAll$hexID
+  
+  test[is.na(test)] <- 0
+  
+  hexRes <- test %>%
+    group_by(hexID) %>%
+    summarise(across(everything(), sum))
+  
+      
+  allcol <- colnames(hexRes[grepl("_A",colnames(hexRes))])
+  
+  calcdis <- hexRes %>% ddplyr::select(allcol) %>% pull()
+  
+  hexRes$DaysAll <- calcdis
+  hexRes$DaysAllQuant <- ecdf(calcdis)(calcdis)
+  
+  hexRes$Class <- ifelse(hexRes$DaysAll<mean(hexres$DaysAll),1,
+         ifelse(hexres$DaysAll>=c(mean(hexres$DaysAll)+sd(hexres$DaysAll)),3,2))
+  
+  hexFinal <- hexRes %>% dplyr::select(hexID, DaysAll, DaysAllQuant, Class)
+  
+  return(hexFinal)
 }
 
-hexSummRes <- hexAll %>%
-  group_by(hexID) %>%
-  summarize(DaysAll = sum(nOprD_A,na.rm=T),DaysCargo = sum(nOprD_C,na.rm=T),DaysTanker = sum(nOprD_T,na.rm=T),
-            DaysFishing = sum(nOprD_F,na.rm=T),DaysOther = sum(nOprD_O,na.rm=T))
-
-# h = hex; F = fall; 1 = first in list
-hF1 <- st_read(getwd(),substr(hexFall[1,1],1,16)) %>%
-  st_drop_geometry()
-hexAll <- hF1
-for (h in 2:nrow(hexFall)){
-  hFn <- st_read(getwd(),substr(hexFall[h,1],1,16)) %>%
-    st_drop_geometry()
-  hexAll <- rbind(hexAll,hFn)
-}
-
-hexFallRes <- hexAll %>%
-  group_by(hexID) %>%
-  summarize(DaysAll = sum(nOprD_A,na.rm=T),DaysCargo = sum(nOprD_C,na.rm=T),DaysTanker = sum(nOprD_T,na.rm=T),
-            DaysFishing = sum(nOprD_F,na.rm=T),DaysOther = sum(nOprD_O,na.rm=T))
-
-# Set up quantiles
-
-hexFallFinal <- hexFallRes %>%
-  mutate(DaysAllQuant = ecdf(DaysAll)(DaysAll)) %>%
-  select(hexID,DaysAll,DaysAllQuant)
-
-hexSummFinal <- hexSummRes %>%
-  mutate(DaysAllQuant = ecdf(DaysAll)(DaysAll)) %>%
-  select(hexID,DaysAll,DaysAllQuant)
-
-
-
-
-# Use Renner & Kuletz (2015) classification: < avg, > avg, and highest (> (avg + 1 SD))
-
-hexSummFinal$Class <- ifelse(hexSummFinal$DaysAll<mean(hexSummFinal$DaysAll),1,
-                             ifelse(hexSummFinal$DaysAll>=c(mean(hexSummFinal$DaysAll)+sd(hexSummFinal$DaysAll)),3,2))
-
-hexFallFinal$Class <- ifelse(hexFallFinal$DaysAll<mean(hexFallFinal$DaysAll),1,
-                             ifelse(hexFallFinal$DaysAll>=c(mean(hexFallFinal$DaysAll)+sd(hexFallFinal$DaysAll)),3,2))
-
-hexFallFinal %>% count(Class)
-
-
-
-
-
-
-resSummFinal$AllClass <- ifelse(c(resSummFinal$SummAll/resSummFinal$survEff)<mean(c(resSummFinal$SummAll/resSummFinal$survEff)),1,
-                                ifelse(c(resSummFinal$SummAll/resSummFinal$survEff)>=c(mean(c(resSummFinal$SummAll/resSummFinal$survEff))+sd(c(resSummFinal$SummAll/resSummFinal$survEff))),3,2))
-
-resSummFinal$DuckClass <- ifelse(c(resSummFinal$SummSeaducks/resSummFinal$survEff)<mean(c(resSummFinal$SummSeaducks/resSummFinal$survEff)),1,
-                                 ifelse(c(resSummFinal$SummSeaducks/resSummFinal$survEff)>=c(mean(c(resSummFinal$SummSeaducks/resSummFinal$survEff))+sd(c(resSummFinal$SummSeaducks/resSummFinal$survEff))),3,2))
-
-resSummFinal$AethClass <- ifelse(c(resSummFinal$SummAethia/resSummFinal$survEff)<mean(c(resSummFinal$SummAethia/resSummFinal$survEff)),1,
-                                 ifelse(c(resSummFinal$SummAethia/resSummFinal$survEff)>=c(mean(c(resSummFinal$SummAethia/resSummFinal$survEff))+sd(c(resSummFinal$SummAethia/resSummFinal$survEff))),3,2))
-
-resSummFinal$ShearClass <- ifelse(c(resSummFinal$SummShear/resSummFinal$survEff)<mean(c(resSummFinal$SummShear/resSummFinal$survEff)),1,
-                                  ifelse(c(resSummFinal$SummShear/resSummFinal$survEff)>=c(mean(c(resSummFinal$SummShear/resSummFinal$survEff))+sd(c(resSummFinal$SummShear/resSummFinal$survEff))),3,2))
-
-
-
-
-resFallFinal$AllClass <- ifelse(c(resFallFinal$FallAll/resFallFinal$survEff)<mean(c(resFallFinal$FallAll/resFallFinal$survEff)),1,
-                                ifelse(c(resFallFinal$FallAll/resFallFinal$survEff)>=c(mean(c(resFallFinal$FallAll/resFallFinal$survEff))+sd(c(resFallFinal$FallAll/resFallFinal$survEff))),3,2))
-
-resFallFinal$DuckClass <- ifelse(c(resFallFinal$FallSeaducks/resFallFinal$survEff)<mean(c(resFallFinal$FallSeaducks/resFallFinal$survEff)),1,
-                                 ifelse(c(resFallFinal$FallSeaducks/resFallFinal$survEff)>=c(mean(c(resFallFinal$FallSeaducks/resFallFinal$survEff))+sd(c(resFallFinal$FallSeaducks/resFallFinal$survEff))),3,2))
-
-resFallFinal$AethClass <- ifelse(c(resFallFinal$FallAethia/resFallFinal$survEff)<mean(c(resFallFinal$FallAethia/resFallFinal$survEff)),1,
-                                 ifelse(c(resFallFinal$FallAethia/resFallFinal$survEff)>=c(mean(c(resFallFinal$FallAethia/resFallFinal$survEff))+sd(c(resFallFinal$FallAethia/resFallFinal$survEff))),3,2))
-
-resFallFinal$ShearClass <- ifelse(c(resFallFinal$FallShear/resFallFinal$survEff)<mean(c(resFallFinal$FallShear/resFallFinal$survEff)),1,
-                                  ifelse(c(resFallFinal$FallShear/resFallFinal$survEff)>=c(mean(c(resFallFinal$FallShear/resFallFinal$survEff))+sd(c(resFallFinal$FallShear/resFallFinal$survEff))),3,2))
+hexFinal %>% count(Class)
 
 
 
@@ -340,14 +252,13 @@ summCombined <- resSummFinal %>%
   left_join(y=hexSummFinal,by="hexID")
 
 
-st_write(summCombined,paste0(getwd(),"/summCombined.shp"))
-st_write(fallCombined,paste0(getwd(),"/fallCombined.shp"))
+st_write(summCombined,"../Data_Processed/summCombined.shp")
+st_write(fallCombined,"../Data_Processed/fallCombined.shp")
 
-
-
-
-
-
+######################################################################################################
+######################################################################################################
+######################################################################################################
+######################################################################################################
 #
 # For 60 N for greater: manual select in GIS, then export selected
 #
