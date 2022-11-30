@@ -7,11 +7,24 @@
 library(tidyverse)
 library(sf)
 
+# Save folder
+# Specify file path for folder where results will be saved
+savefolder <- "../Data_Processed/"
+
+
 # read in just hexagons, drop all attributes except hex ID
 # setwd("/Users/bensullender/Documents/KickstepApproaches_Projects/FWS_AIS/Seabird_Analysis")
 
 hexdir <- "E:/AIS_V2_DayNight_60km6hrgap/Hex/"
+hexList <-list.files(hexdir, pattern=".shp")
+
 hex <- st_read("../Data_Raw/BlankHexes.shp")
+metric <- "OperatingDays" # MUST be "OperatingDays" or "Ships"
+## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
+## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
+
+nightonly <- TRUE #If true, will only calculate nighttime vessel traffic (ignoring daytime)
+# If false, will calculate all vessel traffic, including both day and night
 
 # From downloaded NPPSD:
 loc <- read.csv("../Data_Raw/NPPSD_v3.0/tbl_LOCATION.csv")
@@ -27,13 +40,19 @@ hexMask <- st_read("../Data_Raw/hex_x_ocean/hex_x_ocean.shp") %>%
   mutate(AreaKM = c(st_area(.)/1000000)) %>%
   st_drop_geometry()
 
+months <- c(6,7,8) # Numeric value(s) of months to be included in the analysis 
+monthsname <- "Summer" # Text label describing the numeric months in the analysis (e.g., "Summer", "Annual")
+startyear <- 2006 # Earliest year for which bird observations will be included in the analysis 
+# NOTE: start year is for seabird observations only. Vessel traffic includes all data from 2015-2020
+effortthreshold <- 0.01 # Percentage area of each hex that has to be observed in order to include the hex in the analysis
+
 ##############################################################################################################
 # Function to spatially intersect at sea bird observations with vessel traffic hex grid
 # Also calculates survey effort within each hex during the time period 
 # startyr = oldest year of data collection to be included in the analysis
 # mnths = months of observations to be included in the anlaysis
 # mnthsname = name used to save file and identify month grouping (e.g., "Summer")
-surveyeffort <- function(loc, dataobs, hex, startyr = 2006, mnths = c(1:12),mnthsname = "Annual"){
+surveyEffort <- function(loc, dataobs, hex, startyr, mnths, survfilename){
   # Drop ones that are too old - based on Kathy Kuletz's feedback, prior to 2007 is too old.
   loc <- loc %>%
     filter(Year > startyr) %>%
@@ -92,16 +111,61 @@ surveyeffort <- function(loc, dataobs, hex, startyr = 2006, mnths = c(1:12),mnth
   
   res <- left_join(res,surveyEff,by="hexID")
   
+  # switch NAs to 0s
+  re[is.na(res)] <- 0
+  
   # SET UP AUTO NAME GENERATION
-  st_write(res,paste0("../Data_Processed/ObsInHexes_",mnthsname,".shp"))
+  st_write(res,survfilename)
   
 }
 
-surveyeffort(loc, dataobs, hex, startyr=2006, mnths=c(6,7,8), mnthsname = "Summer")
-surveyeffort(loc, dataobs, hex, startyr=2006, mnths=c(9,10,11), mnthsname = "Fall")
+##############################################################################################################
+#
+# Stack Vessel Traffic
+#
+# hexFall <- hexList %>%
+#   filter(c(substr(name,15,16) %in% c("09","10","11")))
 
-resSumm <- st_read("../Data_Processed/ObsInHexes_Summer.shp")
-resFall<- st_read("../Data_Processed/ObsInHexes_Fall.shp")
+# Metric Options
+## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
+## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
+
+hexStack <- function(filedir, mnths, metric, night=TRUE, trafffilename){
+  
+  hexes <- filedir[substr(filedir,15,16) %in% mnths]
+  
+  # h = hex; S = summer; 1 = first in list
+  temp <- lapply(hexes, function(x){st_read(paste0(hexdir,x)) %>% st_drop_geometry()})
+  hexAll <- do.call(rbind, temp)
+  
+  lab <- ifelse(metric=="OperatingDays", "OpD", 
+                ifelse(metric=="Ships","Shp", NA))
+  lab <- ifelse(night==TRUE, paste0("N_",lab),lab)
+  
+  test <- hexAll[,grep(lab, colnames(hexAll))]
+  test$hexID <- hexAll$hexID
+  
+  test[is.na(test)] <- 0
+  
+  hexRes <- test %>%
+    group_by(hexID) %>%
+    summarise(across(everything(), sum))
+  
+      
+  allcol <- colnames(hexRes[grepl("_A",colnames(hexRes))])
+  
+  calcdis <- hexRes %>% dplyr::select(all_of(allcol)) %>% pull()
+  
+  hexRes$DaysAll <- calcdis
+  hexRes$DaysAllQuant <- ecdf(calcdis)(calcdis)
+  
+  hexRes$Class <- ifelse(hexRes$DaysAll<mean(hexRes$DaysAll),1,
+         ifelse(hexRes$DaysAll>=c(mean(hexRes$DaysAll)+sd(hexRes$DaysAll)),3,2))
+  
+  hexFinal <- hexRes %>% dplyr::select(hexID, DaysAll, DaysAllQuant, Class)
+  
+  st_write(hexFinal,trafffilename)
+}
 
 ##############################################################################################################
 ##
@@ -138,7 +202,6 @@ shear <- c("STSH","SOSH","UNSH","UNDS")
 #stormpet <- c("FTSP","LESP","UNSP")
 
 
-
 ##
 ##      Sample runthrough
 ##
@@ -148,20 +211,44 @@ shear <- c("STSH","SOSH","UNSH","UNDS")
 # mnths = months of observations to be included in the anlaysis
 # taxa = list of 4 digit codes for the groups of seabirds to be included in each analysis 
 
-BirdHexesByEffort <- function(taxaNames = totalBirds, 
-                              taxaLabel = "AllBirds",
-                              res = resSumm, 
-                              hexMask=hexMask, 
-                              effortThreshold = 0.01){
+birdHexesByEffort <- function(dataobs,
+                              loc,
+                              taxaNames, 
+                              taxaLabel,
+                              hexMask, 
+                              effortThreshold, 
+                              mnths,
+                              mnthsnam,
+                              startyr,
+                              savefolder,
+                              filedir, 
+                              metric, 
+                              night=TRUE){
   
-  # First, let's select only hexes with sufficient survey effort and turn observation NAs into 0s
+  # Make sure appropriate vessel data exist and if not, generate it
+  trafffilename <- paste0(savefolder,"TraffInHexes_",mnthsnam,"_Start",startyr,".shp")
+  
+  if(!exists(trafffilename)){
+    hexStack(filedir = hexList, mnths = mnths, metric = metric, night = night, traffilename)
+  }
+  
+  hexFinal <- st_read(trafffilename)
+  
+  # Make sure survey effort has been calculated and saved for appropriate months and if not, generate it
+  survfilename <- paste0(savefolder,"ObsInHexes_",mo=nthsname,"_Start",startyr,".shp")
+  
+  if(!exists(survfilename)){
+    surveyEffort(loc=loc, dataobs=dataobs, hex=hexMask, startyr=startyr, mnths=mnths)
+  }
+  
+  res <- st_read(survfilename)
+  
+  # First, let's select only hexes with sufficient survey effort
   resGuild <- res %>%
     # join in the actual hex marine area sf
     left_join(y=hexMask,by="hexID") %>%
     # and filter by 1% of hex area must be surveyed
     filter(as.numeric(survEff)>c(effortThreshold*as.numeric(AreaKM)))
-  # switch NAs to 0s
-  resGuild[is.na(resGuild)] <- 0
   
   # now for each taxonomic group, create one column with sum of all obs
   resGuildAll <- resGuild[,c(colnames(resGuild) %in% taxaNames)] %>%
@@ -176,71 +263,32 @@ BirdHexesByEffort <- function(taxaNames = totalBirds,
     mutate(AllQ = ecdf(All/survEff)(All/survEff))
   
   resFinal$Class <- ifelse(c(resFinal$All/resFinal$survEff)<mean(c(resFinal$All/resFinal$survEff)),1,
-         ifelse(c(resFinal$All/resFinal$survEff)>=c(mean(c(resFinal$All/resFinal$survEff))+sd(c(resFinal$All/resFinal$survEff))),3,2))
+                           ifelse(c(resFinal$All/resFinal$survEff)>=c(mean(c(resFinal$All/resFinal$survEff))+sd(c(resFinal$All/resFinal$survEff))),3,2))
   
   resFinal$taxa <- taxaLabel
   
-  return(resFinal)
+  finalCombined <- resFinal %>%
+    # join in the actual hex marine area sf
+    left_join(y=hexFinal,by="hexID")
+  
+  st_write(finalCombined, paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_Start",startyear,"_night",night[1],".shp"))
+  
+  return(finalCombined)
 }
 
-##############################################################################################################
-#
-# Stack Vessel Traffic
-#
-
-hexList <-list.files(hexdir, pattern=".shp")
-
-
-# hexFall <- hexList %>%
-#   filter(c(substr(name,15,16) %in% c("09","10","11")))
-
-# Metric Options
-## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
-## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
-
-
-
-hexStack <- function(filedir = hexList, mnths = c("06", "07", "08"), metric="OperatingDays", night=TRUE){
-  
-  hexSumm <- filedir[substr(filedir,15,16) %in% mnths]
-  
-  # h = hex; S = summer; 1 = first in list
-  temp <- lapply(filenames, function(x){st_read(paste0(filedir,x)) %>% st_drop_geometry()})
-  hexAll <- do.call(rbind, temp)
-  
-  lab <- ifelse(metric=="OperatingDays", "OpD", 
-                ifelse(metric=="Ships","Shp", NA))
-  lab <- ifelse(night==TRUE, paste0("N_",lab),lab)
-  
-  test <- hexAll[,grep(lab, colnames(hexAll))]
-  test$hexID <- hexAll$hexID
-  
-  test[is.na(test)] <- 0
-  
-  hexRes <- test %>%
-    group_by(hexID) %>%
-    summarise(across(everything(), sum))
-  
-      
-  allcol <- colnames(hexRes[grepl("_A",colnames(hexRes))])
-  
-  calcdis <- hexRes %>% ddplyr::select(allcol) %>% pull()
-  
-  hexRes$DaysAll <- calcdis
-  hexRes$DaysAllQuant <- ecdf(calcdis)(calcdis)
-  
-  hexRes$Class <- ifelse(hexRes$DaysAll<mean(hexres$DaysAll),1,
-         ifelse(hexres$DaysAll>=c(mean(hexres$DaysAll)+sd(hexres$DaysAll)),3,2))
-  
-  hexFinal <- hexRes %>% dplyr::select(hexID, DaysAll, DaysAllQuant, Class)
-  
-  return(hexFinal)
-}
-
-hexFinal %>% count(Class)
-
-
-
+resFinal <- birdHexesByEffort(taxaNames= totalBirds, 
+                              taxaLabel="AllBirds",
+                              hexMask=hexMask, 
+                              effortThreshold=effortThreshold, 
+                              mnths=months,
+                              mnthsnam=monthsname,
+                              startyr=startyear,
+                              savefolder=savefolder,
+                              filedir=hexList, 
+                              metric=metric, 
+                              night=nightonly)
+###################################### 
+# Save final output
 
 
 fallCombined <- resFallFinal %>%
