@@ -92,7 +92,7 @@ surveyEffort <- function(loc, datobs, hex, startyr, mnths, survfilename){
 
 #### Vessel Activity #### 
 
-hexStack <- function(filedir, mnths, metric, night=TRUE, trafffilename){
+hexStack <- function(filedir, mnths, metric, night, trafffilename){
   
   # Isolate month values of interest from file names 
   hexes <- filedir[as.numeric(substr(filedir,15,16)) %in% mnths]
@@ -104,9 +104,9 @@ hexStack <- function(filedir, mnths, metric, night=TRUE, trafffilename){
   # Select metrics based on inputs 
   lab <- ifelse(metric=="OperatingDays", "OpD", 
                 ifelse(metric=="Ships","Shp", NA))
-  lab <- ifelse(night==TRUE, paste0("N_",lab),lab)
+  lab <- ifelse(night==TRUE, paste0("N_",lab, "_Al"),paste0(lab, "_Al"))
   
-  test <- hexAll[,grep(lab, colnames(hexAll))]
+  test <- hexAll %>% dplyr::select(as.character(lab))
   test$hexID <- hexAll$hexID
   
   # Replace NA values with zero 
@@ -150,12 +150,14 @@ birdHexesByEffort <- function(dataobs,
                               mnthsnam,
                               startyr,
                               savefolder,
-                              filedir, 
+                              figfolder,
+                              filedir,
+                              studyarea,
                               metric, 
-                              night=TRUE){
+                              night){
   
   # Make sure appropriate vessel data exist and if not, generate it
-  trafffilename <- paste0(savefolder,"TraffInHexes_",mnthsnam,".csv")
+  trafffilename <- paste0(savefolder,"TraffInHexes_",mnthsnam,"_NightOnly", night,".csv")
   
   if(!file.exists(trafffilename)){
     hexStack(filedir = hexList, mnths = mnths, metric = metric, night = night, trafffilename)
@@ -172,7 +174,7 @@ birdHexesByEffort <- function(dataobs,
   res <- st_read(survfilename)
   
   # Make sure this function has not already been run with these exact parameter specifications 
-  finaldfname <- paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_night",night[1],".shp")
+  finaldfname <- paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp")
   
   if(!file.exists(finaldfname)){
     
@@ -189,7 +191,7 @@ birdHexesByEffort <- function(dataobs,
     resStacked <- resGuild %>%
       select(hexID,AllBird,survEff,AreaKM)
     
-    # Calculate SD categories for each hex's seabird observations 
+    # Calculate SD categories for each hex's effort-weighted seabird observations 
     resFinal <- resStacked %>%
       mutate(QuantBird = ecdf(AllBird/survEff)(AllBird/survEff))
     
@@ -204,8 +206,46 @@ birdHexesByEffort <- function(dataobs,
     finalCombined <- resFinal %>%
       left_join(y=hexFinal,by="hexID")
     
-    # Save results 
-    st_write(finalCombined, paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_night",night[1],".shp"))
+    # Evaluate risk levels 
+    finalCombined$risk <- ifelse(finalCombined$ClassBird == 1 & finalCombined$ClassShip == 1, "low",
+                ifelse(finalCombined$ClassBird == 1 & finalCombined$ClassShip == 2 | finalCombined$ClassBird == 2 & finalCombined$ClassShip == 1, "medium",
+                ifelse(finalCombined$ClassBird == 1 & finalCombined$ClassShip == 3 | finalCombined$ClassBird == 3 & finalCombined$ClassShip == 1, "medium",
+                ifelse(finalCombined$ClassBird == 3 & finalCombined$ClassShip == 2 | finalCombined$ClassBird == 2 & finalCombined$ClassShip == 3, "high",
+                ifelse(finalCombined$ClassBird == 2 & finalCombined$ClassShip == 2, "high",
+                ifelse(finalCombined$ClassBird == 3 & finalCombined$ClassShip == 3, "veryhigh", NA))))))
+    
+    finalCombined$risk <- factor(finalCombined$risk,  c("low","medium","high","veryhigh"))
+    
+    # Plot results
+    studyareanew <- studyarea %>% st_crop(st_buffer(finalCombined, 100000))
+    
+    p1 <- ggplot() +
+      geom_sf(data=studyareanew, fill="#fefeff", lwd=0) +
+      geom_sf(data=finalCombined,aes(fill = risk)) +
+      scale_fill_manual(values = c("low" = "#73b2ff",
+                                   "medium" = "#55fe01",
+                                   "high" = "#ffff01",
+                                   "veryhigh" = "#e31a1c"), 
+                        name="Risk", 
+                        labels = c("Low", "Medium", "High", "Very High")) +
+      xlab("") +
+      ylab("") +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      ggtitle(ifelse(night == FALSE, paste0(taxaLabel, " - ", monthsname, " - All Traffic"), 
+                     paste0(taxaLabel, " - ", monthsname, " - Night Traffic"))) +
+      theme_bw() +
+      theme(text = element_text(size = 25),
+            axis.text=element_blank(),
+            panel.background = element_rect(fill = "#bcc7dd"),
+            panel.border =  element_rect(colour = "black"),
+            panel.grid.major = element_line(colour = "transparent"))
+    
+    # Save figure 
+    ggsave(filename = paste0(figfolder,"Map_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".png"), 
+           plot = p1, width=12, height=8, units="in")
+    
+    # Save data 
+    st_write(finalCombined, paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp"))
     }
 }
-

@@ -409,31 +409,31 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
 ####################################################################
 
 
-# Import hex grid
-hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
-
-daynight <- TRUE
-
-# Pull up list of AIS files
-files <-  list.files("D:/AlaskaConservation_AIS_20210225/Data_Raw/2015/", pattern='.csv', full.names=T)
-
-# Separate file names into monthly lists
-jan <- files[grepl("-01-", files)]
-
-csvList <- jan[27:28]
-
-# # Separate file names into monthly lists
-# jun <- files[grepl("-06-", files)]
+# # Import hex grid
+# hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
 # 
-# csvList <- jun[27:28]
-
-# Run the speed hex creation script
-starthex1 <- proc.time()
-FWS.AIS.SpeedHex(csvList, hexgrid)
-endhex1 <- proc.time() - starthex1
-
-
-browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ&ab_channel=RHINO")
+# daynight <- TRUE
+# 
+# # Pull up list of AIS files
+# files <-  list.files("D:/AlaskaConservation_AIS_20210225/Data_Raw/2015/", pattern='.csv', full.names=T)
+# 
+# # Separate file names into monthly lists
+# jan <- files[grepl("-01-", files)]
+# 
+# csvList <- jan[27:28]
+# 
+# # # Separate file names into monthly lists
+# # jun <- files[grepl("-06-", files)]
+# # 
+# # csvList <- jun[27:28]
+# 
+# # Run the speed hex creation script
+# starthex1 <- proc.time()
+# FWS.AIS.SpeedHex(csvList, hexgrid)
+# endhex1 <- proc.time() - starthex1
+# 
+# 
+# browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ&ab_channel=RHINO")
 # 
 # 
 ############# MANUAL CHECK OF SUNRISE/SUNSET AND POSITION IN LOCAL TIME ############
