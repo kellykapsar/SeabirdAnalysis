@@ -48,8 +48,9 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   start <- proc.time()
   
   # this will come in handy later. chars 28 to 34 = "yyyy-mm"
-  # MoName <- substr(csvList[[1]][1],77, 83) # MY COMPUTER
-  MoName <- substr(csvList[[1]][1],45, 51) # HPCC
+  MoNameOld <- substr(csvList[[1]][1],44, 49) # HPCC 
+  # MoNameOld <- substr(csvList[[1]][1],38, 43) # MY COMPUTER
+  MoName <- paste0(substr(MoNameOld,1,4), "-", substr(MoNameOld,5,6))
   yr <- substr(MoName, 1, 4) 
   mnth <- substr(MoName, 6, 7)
   print(paste0("Processing",yr, mnth))
@@ -59,33 +60,43 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   runtimes <- data.frame(yr = yr, mnth=mnth)
   
   # read in csv (specifying only columns that we want based on position in dataframe)
-  temp <-  lapply(csvList, read.csv, header=TRUE, na.strings=c("","NA"),
-                  colClasses = c(rep("character", 2), "NULL", "character", "NULL", "NULL", 
-                                 "character", rep("NULL", 6), "character", "NULL", rep("character",8),
-                                 "NULL", "character", "NULL", "character", "NULL", rep("character", 2), rep("NULL", 109)
-                  ))
-  
+  temp <-  lapply(csvList, read.csv, header=TRUE, na.strings=c("","NA"))
   
   AIScsv <- do.call(rbind , temp)
+  
+  AIScsvNew <- AIScsv %>% rename(MMSI = mmsi, 
+                                 Longitude = longitude, 
+                                 Latitude = latitude, 
+                                 Time = dt_pos_utc, 
+                                 Message_ID = message_type, 
+                                 SOG = sog, 
+                                 Ship_Type = vessel_type_code,
+                                 Country = flag_country, 
+                                 Vessel_Name = vessel_name, 
+                                 IMO = imo, 
+                                 Draught = draught, 
+                                 Navigational_status = nav_status_code, 
+                                 Length = length, 
+                                 Width = width)
   
   metadata$orig_MMSIs <- length(unique(AIScsv$MMSI))
   metadata$orig_pts <- length(AIScsv$MMSI)
   
   runtimes$importtime <- (proc.time() - start)[[3]]/60
   
-  # print(paste("Imported: ",yr, mnth))
+  print(paste("Imported: ",yr, mnth))
   ##################### Data cleaning ######################
   start <- proc.time()
   
   # Convert character columns to numeric as needed
-  numcols <- c(1:2, 6:12, 14:17)
-  AIScsv[,numcols] <- lapply(AIScsv[,numcols], as.numeric)
+  numcols <- c("MMSI", "Message_ID", "IMO", "Ship_Type", "Length", "Width", 
+               "Draught", "Navigational_status", "SOG", "Longitude", "Latitude")
+  AIScsvNew[,numcols] <- lapply(AIScsvNew[,numcols], as.numeric)
   
   # print(paste("Numeric cols: ",yr, mnth))
   # Create df using only position messages (excluding type 27 which has increased location error)
   # For more info on message types see: https://www.marinfo.gc.ca/e-nav/docs/list-of-ais-messages-en.php
-  AIScsvDF5 <- AIScsv %>%
-    dplyr::select(MMSI,Latitude,Longitude,Time,Message_ID,SOG) %>%
+  AIScsvDF5 <- AIScsvNew %>%
     subset(!(Message_ID %in% c(5,24, 27)))
   
   metadata$messid_mmsis <- length(unique(AIScsvDF5$MMSI))
@@ -142,8 +153,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
     # project into Alaska Albers (or other CRS that doesn't create huge gap in mid-Bering with -180W and 180E)
     st_transform(crs=3338) %>%
     st_join(hexgrid["hexID"]) %>% 
-    mutate(Time = as.POSIXct(Time, format="%Y%m%d_%H%M%OS", tz="GMT")) %>% # GMT == UTC
-    # mutate(Time = as.POSIXct(Time, format="%Y%m%d_%H%M%OS")) %>% # GMT == UTC
+    mutate(Time = as.POSIXct(Time, format="%Y-%m-%d %H:%M:%OS", tz="GMT")) %>% # GMT == UTC
     arrange(Time) 
   
   runtimes$dftime <- (proc.time() - start)[[3]]/60
@@ -208,57 +218,24 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   }
 
   start <- proc.time()
-  
-  # create lookup table from static messages
-  AISlookup1 <- AIScsv %>%
-    add_column(DimLength = AIScsv$Dimension_to_Bow+AIScsv$Dimension_to_stern, 
-               DimWidth = AIScsv$Dimension_to_port+AIScsv$Dimension_to_starboard) %>%
-    dplyr::select(-Navigational_status, 
-                  -SOG, 
-                  -Longitude, 
-                  -Latitude) %>%
-    filter(Message_ID %in% c(5,24)) %>%
-    filter(nchar(trunc(abs(MMSI))) == 9) 
-  
-  # Identify "best" static message from a given day 
-  # Take all the static messages from a given month and down weight messages with a ship 
-  # type of 0 or NA. Take the static messages and keeps the message with the highest weight
-  # Code adapted from: https://stackoverflow.com/questions/72650475/take-unique-rows-in-r-but-keep-most-common-value-of-a-column-and-use-hierarchy
-  wghts <- data.frame(poss = c(0, NA), nums = c(-10, -10))
-  matched <- left_join(AISlookup1, wghts, by = c("Ship_Type"= "poss"))
-  matched$nums[is.na(matched$nums)] <- 1
-  data.table::setDT(matched)[, freq := .N, by = c("MMSI", "Ship_Type")]
-  multiplied <- distinct(matched, MMSI, Ship_Type, .keep_all = TRUE)
-  multiplied$mult <- multiplied$nums * multiplied$freq
-  check <- multiplied[with(multiplied, order(MMSI, -mult)), ]
-  AISlookup <- distinct(check, MMSI, .keep_all = TRUE) %>% dplyr::select(-nums, -freq, -mult)
-  
-  metadata$InSfNotLookup_mmsis <- length(AISspeed$MMSI[!(AISspeed$MMSI %in% AISlookup$MMSI)])
-  metadata$InLookupNotSf_mmsis <- length(AISlookup$MMSI[!(AISlookup$MMSI %in% AISspeed$MMSI)])
-  
-  
+
   # Calculate number of ships with 0 values in dimensions and convert to NA
-  metadata$nolength <- length(which(is.na(AISlookup$Dimension_to_Bow | AISlookup$Dimension_to_stern)))
-  zerolength <- which(AISlookup$Dimension_to_Bow == 0 | AISlookup$Dimension_to_stern == 0)
-  metadata$pctzerolength <- round((metadata$nolength + length(zerolength))/length(AISlookup$Dimension_to_Bow)*100,2)
+  metadata$nowidth <- length(which(is.na(AISspeed$Width)))
+  zerowidth <- which(AISspeed$Width == 0)
+  metadata$pctzerowidth <- round((metadata$nowidth + length(zerowidth))/length(AISspeed$Width)*100,2)
   
-  metadata$nowidth <- length(which(is.na(AISlookup$Dimension_to_port | AISlookup$Dimension_to_starboard)))
-  zerowidth <- which(AISlookup$Dimension_to_port == 0 | AISlookup$Dimension_to_starboard == 0)
-  metadata$pctzerowidth <- round((metadata$nowidth + length(zerowidth))/length(AISlookup$Dimension_to_port)*100,2)
+  metadata$nolength <- length(which(is.na(AISspeed$Length)))
+  zerolength <- which(AISspeed$Length == 0)
+  metadata$pctzerolength <- round((metadata$nolength + length(zerolength))/length(AISspeed$Length)*100,2)
   
   # Remove zero value rows for consideration of respective measurement
   # (i.e. if either bow or stern is zero, then both get NA 
   # and if either port or starboard is zero then both get NA)
-  AISlookup$Dimension_to_Bow[zerolength] <- NA
-  AISlookup$Dimension_to_stern[zerolength] <- NA
-  AISlookup$Dimension_to_port[zerowidth] <- NA
-  AISlookup$Dimension_to_starboard[zerowidth] <- NA
+  AISspeed$Length[zerolength] <- NA
+  AISspeed$Width[zerowidth] <- NA
   
-
-  # Join lookup table to the lines based on scramble mmsi
-  AISjoined <- st_drop_geometry(AISspeed) %>%
-    left_join(AISlookup,by="MMSI")
   
+  AISjoined <- st_drop_geometry(AISspeed)
   # ID ship type 
   # link to ship type/numbers table: 
   # https://help.marinetraffic.com/hc/en-us/articles/205579997-What-is-the-significance-of-the-AIS-Shiptype-number-
@@ -292,9 +269,9 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   metadata$pctremoved <- round((length(unique(AIScsvDF5$MMSI)) - length(unique(AISjoined$MMSI)))/length(unique(AIScsvDF5$MMSI))*100, 2)
   
   # Thrown out for missing/incorrect lat/lon/MMSI, duplicate points, speed > 100 km/hr, outisde hex grid
-  metadata$pctmissingwidth <- round(sum(is.na(AISjoined$DimWidth))/length(AISjoined$DimWidth)*100, 2)
-  metadata$ pctmissinglength <- round(sum(is.na(AISjoined$DimLength))/length(AISjoined$DimLength)*100, 2)
-  metadata$pctmissingSOG <-  round(sum(is.na(AISjoined$SOG))/length(AISjoined$DimLength)*100, 2)
+  metadata$pctmissingwidth <- round(sum(is.na(AISjoined$Width))/length(AISjoined$Width)*100, 2)
+  metadata$ pctmissinglength <- round(sum(is.na(AISjoined$Length))/length(AISjoined$Length)*100, 2)
+  metadata$pctmissingSOG <-  round(sum(is.na(AISjoined$SOG))/length(AISjoined$Length)*100, 2)
   
   # # Loop through each ship type and calculate summary statistics
   allTypes <- unique(AISjoined$AIS_Type)
@@ -312,7 +289,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
         group_by(hexID) %>%
         summarize(SOG = mean(SOG, na.rm=T),
                   Sd = sd(SOG, na.rm=T),
-                  Len = mean(DimLength, na.rm=T), 
+                  Len = mean(Length, na.rm=T), 
                   nPt=n(), 
                   Shp=length(unique(MMSI)),
                   OpD=length(unique(AIS_ID)))
@@ -321,7 +298,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
         group_by(hexID) %>%
         summarize(N_SOG = mean(SOG, na.rm=T),
                   N_Sd = sd(SOG, na.rm=T),
-                  N_Len = mean(DimLength, na.rm=T), 
+                  N_Len = mean(Length, na.rm=T), 
                   N_nPt=n(), 
                   N_Shp=length(unique(MMSI)),
                   N_OpD=length(unique(AIS_ID)))
@@ -336,7 +313,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
         group_by(hexID) %>%
         summarize(SOG=mean(SOG, na.rm=T),
                   Sd = sd(SOG, na.rm=T),
-                  Len = mean(DimLength, na.rm=T), 
+                  Len = mean(Length, na.rm=T), 
                   nPt=n(), 
                   nShp =length(unique(MMSI)),
                   OpD=length(unique(AIS_ID)))
@@ -347,13 +324,12 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
     hexgrid <- left_join(hexgrid, joinOutNew, by="hexID")
   }
   
-  # Calculate summary stats for all ship types in aggregate
   # Calculate average speed within hex grid 
   allShips <- AISjoined %>%
     group_by(hexID) %>%
     summarize(SOG=mean(SOG, na.rm=T),
               Sd = sd(SOG, na.rm=T),
-              Len = mean(DimLength, na.rm=T), 
+              Len = mean(Length, na.rm=T), 
               nPt=n(), 
               nShp=length(unique(MMSI)),
               OpD=length(unique(AIS_ID)))
@@ -362,7 +338,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
     group_by(hexID) %>%
     summarize(N_SOG = mean(SOG, na.rm=T),
               N_Sd = sd(SOG, na.rm=T),
-              N_Len = mean(DimLength, na.rm=T), 
+              N_Len = mean(Length, na.rm=T), 
               N_nPt = n(), 
               N_nShp =length(unique(MMSI)),
               N_OpD=length(unique(AIS_ID)))
@@ -382,9 +358,9 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   
   # Save data in vector format
   # write_sf(hexgrid, paste0("../Data_Processed_TEST/Hex/SpeedHex_",MoName,"_",ndays,".shp"))
-  write_sf(hexgrid, paste0("../Sandbox/Hex/Hex_",MoName,"_NightOnly",nightonly,".shp"))
-  # write_sf(AISjoined, paste0("../Sandbox_TEST/Hex/SpeedPts_",MoName,"_",ndays,".shp"))
-  # write_sf(hexpts, paste0("../Sandbox_TEST/Hex/SpeedPts_",MoName,".shp"))
+  write_sf(hexgrid, paste0("../Data_Processed/Hex/Hex_",MoName,"_NightOnly",nightonly,".shp"))
+  # write_sf(AISjoined, paste0("../Data_Processed_TEST/Hex/SpeedPts_",MoName,"_",ndays,".shp"))
+  # write_sf(hexpts, paste0("../Data_Processed_TEST/Hex/SpeedPts_",MoName,".shp"))
   
   
   # Save processing info to text file 
@@ -393,11 +369,11 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   runtimes$runtime <- (proc.time() - starttime)[[3]]
   runtimes$runtime_min <- runtimes$runtime/60 
 
-  write.csv(metadata, paste0("../Sandbox/Hex/HexMetadata_",MoName,"_NightOnly",nightonly,".csv"))
+  write.csv(metadata, paste0("../Data_Processed/Hex/HexMetadata_",MoName,"_NightOnly",nightonly,".csv"))
   
   
-  write.csv(runtimes, paste0("../Sandbox/Hex/HexRuntimes_",MoName,"_NightOnly",nightonly,".csv"))
-  # write.csv(runtimes, paste0("../Sandbox_TEST/Hex/Runtimes_SpeedHex_",MoName,"_",ndays,".csv"))
+  write.csv(runtimes, paste0("../Data_Processed/Hex/HexRuntimes_",MoName,"_NightOnly",nightonly,".csv"))
+  # write.csv(runtimes, paste0("../Data_Processed_TEST/Hex/Runtimes_SpeedHex_",MoName,"_",ndays,".csv"))
   # print(runtimes)
   # return(runtimes)
 }
@@ -406,23 +382,23 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
 ####################### RUNNING SPEED SCRIPT ####################### 
 ####################################################################
 
-
+# 
 # # Import hex grid
 # hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
 # 
 # nightonly <- TRUE
 # 
 # # Pull up list of AIS files
-# files <-  list.files("D:/AlaskaConservation_AIS_20210225/Data_Raw/2015/", pattern='.csv', full.names=T)
+# files <-  list.files("D:/NSF_AIS_2021-2022/2021/", pattern='.csv', full.names=T)
 # 
 # # Separate file names into monthly lists
-# jan <- files[grepl("-01-", files)]
+# jan <- files[grepl("exactEarth_202101", files)]
 # 
 # csvList <- jan[27:28]
 # 
 # # # Separate file names into monthly lists
 # # jun <- files[grepl("-06-", files)]
-# # 
+# #
 # # csvList <- jun[27:28]
 # 
 # # Run the speed hex creation script
@@ -432,7 +408,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
 # 
 # 
 # browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ&ab_channel=RHINO")
-# 
+# # 
 # 
 ############# MANUAL CHECK OF SUNRISE/SUNSET AND POSITION IN LOCAL TIME ############
 # AISspeedTest <- AISspeed %>% dplyr::select(MMSI, Time, solarpos, todsolar, sunrise, sunset, todriseset) %>%
@@ -477,21 +453,21 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
 ####################################################################
 
 # Pull up list of AIS files
-files <- paste0("../Data_Raw/2015/", list.files("../Data_Raw/2015", pattern='.csv'))
+files <- paste0("../Data_Raw/2021/", list.files("../Data_Raw/2021", pattern='.csv'))
 
 # Separate file names into monthly lists
-jan <- files[grepl("-01-", files)]
-feb <- files[grepl("-02-", files)]
-mar <- files[grepl("-03-", files)]
-apr <- files[grepl("-04-", files)]
-may <- files[grepl("-05-", files)]
-jun <- files[grepl("-06-", files)]
-jul <- files[grepl("-07-", files)]
-aug <- files[grepl("-08-", files)]
-sep <- files[grepl("-09-", files)]
-oct <- files[grepl("-10-", files)]
-nov <- files[grepl("-11-", files)]
-dec <- files[grepl("-12-", files)]
+jan <- files[grepl("exactEarth_202101", files)]
+feb <- files[grepl("exactEarth_202102", files)]
+mar <- files[grepl("exactEarth_202103", files)]
+apr <- files[grepl("exactEarth_202104", files)]
+may <- files[grepl("exactEarth_202105", files)]
+jun <- files[grepl("exactEarth_202106", files)]
+jul <- files[grepl("exactEarth_202107", files)]
+aug <- files[grepl("exactEarth_202108", files)]
+sep <- files[grepl("exactEarth_202109", files)]
+oct <- files[grepl("exactEarth_202110", files)]
+nov <- files[grepl("exactEarth_202111", files)]
+dec <- files[grepl("exactEarth_202112", files)]
 
 # Create a list of lists of all csv file names grouped by month
 csvsByMonth <- list(jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec)
