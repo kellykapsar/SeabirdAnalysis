@@ -21,13 +21,11 @@ library(rgdal)
 library(dplyr)
 library(tidyr)
 library(purrr)
-library(lutz)
 library(lubridate)
 library(tibble)
 library(sf)
 library(foreach)
 library(doParallel)
-library(lutz)
 
 ####################################################################
 ##################### AIS PROCESSING FUNCTION ######################
@@ -41,7 +39,7 @@ library(lutz)
 ## Monthly vector files (hex grid) containing ship traffic summary statistics 
 ## by ship type and ship length. 
 
-FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
+FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   # start timer 
   starttime <- proc.time()
   
@@ -50,8 +48,8 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
   start <- proc.time()
   
   # this will come in handy later. chars 28 to 34 = "yyyy-mm"
-  MoName <- substr(csvList[[1]][1],77, 83) # MY COMPUTER
-  # MoName <- substr(csvList[[1]][1],45, 51) # HPCC
+  # MoName <- substr(csvList[[1]][1],77, 83) # MY COMPUTER
+  MoName <- substr(csvList[[1]][1],45, 51) # HPCC
   yr <- substr(MoName, 1, 4) 
   mnth <- substr(MoName, 6, 7)
   print(paste0("Processing",yr, mnth))
@@ -192,7 +190,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
 
   
   # Calculate whether points are occurring during daytime or at night
-  if(daynight==TRUE){
+  if(nightonly==TRUE){
     print(paste("Spatial ",yr, mnth))
     temp <- st_coordinates(st_transform(AISspeed, 4326))
     
@@ -307,7 +305,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
     AISfilteredType <- AISjoined %>%
       filter(AIS_Type==allTypes[k])
     
-    if(daynight == TRUE){
+    if(nightonly == TRUE){
       
       # Calculate average speed within hex grid 
       joinOut <- AISfilteredType %>%
@@ -331,7 +329,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
       joinOutNew <- joinOutNew %>% 
         mutate_at(c(1:ncol(joinOutNew)), ~replace_na(.,0))
     }
-    if(daynight == FALSE){
+    if(nightonly == FALSE){
       
       # Calculate average speed within hex grid 
       joinOutNew <- AISfilteredType %>%
@@ -384,7 +382,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
   
   # Save data in vector format
   # write_sf(hexgrid, paste0("../Data_Processed_TEST/Hex/SpeedHex_",MoName,"_",ndays,".shp"))
-  write_sf(hexgrid, paste0("../Sandbox/Hex/SpeedHex_",MoName,".shp"))
+  write_sf(hexgrid, paste0("../Sandbox/Hex/Hex_",MoName,"_NightOnly",nightonly,".shp"))
   # write_sf(AISjoined, paste0("../Sandbox_TEST/Hex/SpeedPts_",MoName,"_",ndays,".shp"))
   # write_sf(hexpts, paste0("../Sandbox_TEST/Hex/SpeedPts_",MoName,".shp"))
   
@@ -395,10 +393,10 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
   runtimes$runtime <- (proc.time() - starttime)[[3]]
   runtimes$runtime_min <- runtimes$runtime/60 
 
-  write.csv(metadata, paste0("../Sandbox/Hex/Metadata_SpeedHex_",MoName,".csv"))
+  write.csv(metadata, paste0("../Sandbox/Hex/HexMetadata_",MoName,"_NightOnly",nightonly,".csv"))
   
   
-  write.csv(runtimes, paste0("../Sandbox/Hex/Runtimes_SpeedHex_",MoName,".csv"))
+  write.csv(runtimes, paste0("../Sandbox/Hex/HexRuntimes_",MoName,"_NightOnly",nightonly,".csv"))
   # write.csv(runtimes, paste0("../Sandbox_TEST/Hex/Runtimes_SpeedHex_",MoName,"_",ndays,".csv"))
   # print(runtimes)
   # return(runtimes)
@@ -412,7 +410,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
 # # Import hex grid
 # hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
 # 
-# daynight <- TRUE
+# nightonly <- TRUE
 # 
 # # Pull up list of AIS files
 # files <-  list.files("D:/AlaskaConservation_AIS_20210225/Data_Raw/2015/", pattern='.csv', full.names=T)
@@ -479,7 +477,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, daynight=TRUE){
 ####################################################################
 
 # Pull up list of AIS files
-files <- paste0("../Data_Raw/2016/", list.files("../Data_Raw/2016", pattern='.csv'))
+files <- paste0("../Data_Raw/2020/", list.files("../Data_Raw/2020", pattern='.csv'))
 
 # Separate file names into monthly lists
 jan <- files[grepl("-01-", files)]
@@ -513,7 +511,7 @@ res=list()
 # note that you have to tell each core what packages you need (another reason to minimize library use), so it can pull those over
 # I'm using tidyverse since it combines dplyr and tidyr into one library (I think)
 res=foreach(i=1:12,.packages=c("maptools", "rgdal", "dplyr", "tidyr", "tibble", "sf", "foreach", "doParallel"),
-            .errorhandling='pass',.verbose=T,.multicombine=TRUE) %dopar% FWS.AIS.SpeedHex(csvList=csvsByMonth[[i]], hexgrid=hexgrid, daynight=TRUE)
+            .errorhandling='pass',.verbose=T,.multicombine=TRUE) %dopar% FWS.AIS.SpeedHex(csvList=csvsByMonth[[i]], hexgrid=hexgrid, nightonly=TRUE)
 # lapply(csvsByMonth, FWS.AIS)
 
 # Elapsed time and running information
