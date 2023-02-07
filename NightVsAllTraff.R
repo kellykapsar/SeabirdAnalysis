@@ -30,7 +30,7 @@ figfolder <- "../Figures/"
 
 # Read in vessel traffic data 
 hexdir <- "D:/AIS_V2_DayNight_60km6hrgap/Hex/"
-hexList <-list.files(hexdir, pattern=".shp")
+hexList <-list.files(hexdir, pattern=".shp", full.names=TRUE)
 
 # Read in blank hexagon template 
 # hex <- st_read("../Data_Raw/BlankHexes.shp")
@@ -70,25 +70,50 @@ monthsname <- "Summer"
 source("./Seabird_Vessel_Analysis_Functions.R")
 
 
+jan <- st_read(hexList[[1]]) %>% dplyr::select(hexID, year, month, N_OpD_Al, OpD_Al)
 
-traffnight <- read.csv(paste0(savefolder,"TraffInHexes_",monthsname,"_NightOnlyTRUE.csv"))
+# Read in data 
+temp <- lapply(hexList, function(x){st_read(x) %>% st_drop_geometry()})
+hexAll <- do.call(rbind, temp)
 
-colnames(traffnight) <- paste0("N_",colnames(traffnight))
+# Select metrics 
 
-traffall <- read.csv(paste0(savefolder,"TraffInHexes_",monthsname,"_NightOnlyFALSE.csv"))
+test <- hexAll %>% dplyr::select(hexID, year, month, N_OpD_Al, OpD_Al)
 
-traff <- left_join(traffall, traffnight, by=c("hexID" = "N_hexID"))
+# Replace NA values with zero 
+test[is.na(test)] <- 0
+
+# Calculate proportion of vessel traffic at night for each hex in each month
+test$propnight <- test$N_OpD_Al/test$OpD_Al
+
+test$date <- as.POSIXct(strptime(paste0(test$year, "-", test$month, "-01"),format="%Y-%m-%d", tz="UTC"))
 
 
-traff$prop <- traff$N_AllShip/traff$AllShip
+testwide <- test %>% dplyr::select(date, hexID, propnight) %>% spread(., key = date, value=propnight)
 
-hextraff <- left_join(hexMask, traff, by=c("hexID" = "hexID"))
+hexpropnight <- left_join(hexMask, testwide, by=c("hexID" = "hexID"))
+
+hexpropnight$lat <- st_coordinates(st_centroid(hexpropnight))[,"Y"]
+
+testnona <- test[test$OpD_Al != 0,]
+
+testnona <- left_join(testnona, st_drop_geometry(hexpropnight[, c("hexID", "lat")]), by =c("hexID"="hexID"))
 
 
-hextraffnew <- hextraff[hextraff$AllShip > 0, ]
+ggplot(testnona, aes(x = month, y = propnight)) +
+  geom_point(aes(color = lat, size=OpD_Al)) +
+  scale_size(trans="log10")
+
+
+ggplot(testnona, aes(x = month, y = lat)) +
+  geom_jitter(aes(color = propnight, size=OpD_Al)) +
+  scale_color_gradient2(low="yellow", mid="gray", high="black", 
+                        limits = c(0,1)) +
+  scale_size(trans="log10") 
+
 
 ggplot() +
-  geom_sf(data=hextraffnew, aes(fill=N_AllShip), lwd=0) +
+  geom_sf(data=hexpropnight, aes(fill=2015-01-01), lwd=0) +
   # geom_sf(data=finalCombined,aes(fill = risk)) +
   # scale_fill_manual(values = c("low" = "#73b2ff",
   #                              "medium" = "#55fe01",
@@ -110,7 +135,7 @@ ggplot() +
         panel.grid.major = element_line(colour = "transparent"))
 
 
-st_write(hextraff, "../Sandbox/PropTraffAtNight.shp")
+st_write(hexpropnight, "../Sandbox/PropTraffAtNight_20230207.shp")
 # Save figure 
 ggsave(filename = paste0(figfolder,"Map_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".png"), 
        plot = p1, width=12, height=8, units="in")
