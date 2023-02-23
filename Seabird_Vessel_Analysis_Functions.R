@@ -23,50 +23,53 @@ surveyEffort <- function(loc, datobs, hex, startyr, mnths, survfilename){
   # Drop observations that are too old or off-transect
   # Based on Kathy Kuletz's feedback, prior to 2007 is too old.
   loc <- loc %>%
-    filter(Year > startyr) %>%
+    mutate(date = lubridate::as_datetime(local_date_time), 
+           year = lubridate::year(date), 
+           month = lubridate::month(date)) %>% 
+    filter(year > startyr) %>%
     # Removing off-transect from location data
-    filter(Modified.Survey.Type != "Off Transect Observation") %>%
+    filter(modified_survey_type != "Off Transect Observation") %>%
     droplevels()
   
   datobs <- datobs %>%
     # Removing off-transect from observations
-    filter(OT.OBS != "Off") %>%
-    left_join(x=datobs,y=loc,by="Master.Key") %>%
-    filter(Year > startyr) %>%
+    filter(on_of_tx != "Off") %>%
+    left_join(x=datobs,y=loc,by="master_key") %>%
+    filter(year > startyr) %>%
     droplevels()
   
   # Identify unique 4-digit codes for each bird spp 
-  birdNames <- unique(datobs$NPPSD.4.Letter.Code)
+  birdNames <- unique(datobs$species_code)
   
   # convert to SF and transform to Alaska Albers (epsg 3338), otherwise hexagons over -180:180 get warped
-  datSF <- st_as_sf(datobs,coords = c("Lon","Lat"),crs=4326) %>%
+  datSF <- st_as_sf(datobs,coords = c("longitude","latitude"),crs=4326) %>%
     st_transform(crs=3338)
-  locSF <- st_as_sf(datobs,coords = c("Lon","Lat"),crs=4326) %>%
+  locSF <- st_as_sf(loc,coords = c("longitude","latitude"),crs=4326) %>%
     st_transform(crs=3338)
   
   # Set up one df for bird obs and another df for survey effort
   locIn <- locSF %>%
     # Remove observations from months outside of window of interest
-    filter(Month %in% mnths) %>%
+    filter(month %in% mnths) %>%
     # Spatially join with hexagon data 
     st_join(hex) %>%
     st_drop_geometry()
   
   obsIn <- datSF %>%
-    filter(Month %in% mnths)  %>%
+    filter(month %in% mnths)  %>%
     st_join(hex) %>%
     st_drop_geometry() %>%
-    filter(Number!="")
+    filter(number!="")
   
   res <- hex
   sppNout <- as.list(NA)
   
   # Iterate through each spp and calculate number of observations per hex
   for (i in 1:length(birdNames)){
-    obsIn2 <- obsIn[obsIn$NPPSD.4.Letter.Code==birdNames[i],]
+    obsIn2 <- obsIn[obsIn$species_code==birdNames[i],]
     sppNout[[i]] <- obsIn2 %>%
       group_by(hexID) %>%
-      summarize(birdN = sum(as.numeric(Number))) %>%
+      summarize(birdN = sum(as.numeric(number))) %>%
       as.data.frame()
     names(sppNout[[i]]) <- c("hexID",birdNames[i])
   }
@@ -78,7 +81,7 @@ surveyEffort <- function(loc, datobs, hex, startyr, mnths, survfilename){
   # Calculate survey effort within each hex 
   surveyEff <- locIn %>%
     group_by(hexID) %>%
-    summarize(survEff = sum(as.numeric(Sample.Area.y))) %>%
+    summarize(survEff = sum(as.numeric(sample_area))) %>%
     as.data.frame()
   
   res <- left_join(res,surveyEff,by="hexID")
@@ -95,7 +98,7 @@ surveyEffort <- function(loc, datobs, hex, startyr, mnths, survfilename){
 hexStack <- function(filedir, mnths, metric, night, trafffilename){
   
   # Isolate month values of interest from file names 
-  hexes <- filedir[as.numeric(substr(filedir,15,16)) %in% mnths]
+  hexes <- filedir[as.numeric(substr(filedir,10,11)) %in% mnths]
   
   # Read in data 
   temp <- lapply(hexes, function(x){st_read(paste0(hexdir,x)) %>% st_drop_geometry()})

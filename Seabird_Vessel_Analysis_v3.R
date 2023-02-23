@@ -7,7 +7,7 @@
 # AUTHORS: Ben Sullender & Kelly Kapsar, with guidance from Kathy Kuletz
 #
 # CREATED: 13 July 2022
-# LAST UPDATED ON: 1 December 2022
+# LAST UPDATED ON: 23 February 2023
 ################################################################################
 
 ########################
@@ -41,8 +41,8 @@ hexMask <- st_read("../Data_Raw/hex_x_ocean/hex_x_ocean.shp") %>%
   mutate(AreaKM = c(st_area(.)/1000000)) 
 
 # Load in seabird data from NPPSD v3.0
-loc <- read.csv("../Data_Raw/NPPSD_v3.0/tbl_LOCATION.csv") 
-datobs <- read.csv("../Data_Raw/NPPSD_v3.0/tbl_DATA_OBS.csv")
+loc <- read.csv("../Data_Raw/NPPSD_v4.0/Locations_NPPSDv4.csv") 
+datobs <- read.csv("../Data_Raw/NPPSD_v4.0/Observations_NPPSDv4.csv")
 
 # Load in basemap for plots
 studyarea <- st_read("../Data_Raw/AK_CAN_RUS/AK_CAN_RUS.shp") 
