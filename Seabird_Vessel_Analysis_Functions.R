@@ -198,6 +198,9 @@ birdHexesByEffort <- function(dataobs,
     resFinal <- resStacked %>%
       mutate(QuantBird = ecdf(AllBird/survEff)(AllBird/survEff))
     
+    # Calculate effort-weighted densities of seabirds (# birds per square km of surveyed area)
+    resFinal$DensBird <- c(resFinal$AllBird/resFinal$survEff)
+    
     # Calculate effort-weighted classes for the number of observations 
     resFinal$ClassBird <- ifelse(c(resFinal$AllBird/resFinal$survEff)<mean(c(resFinal$AllBird/resFinal$survEff)),1,
                              ifelse(c(resFinal$AllBird/resFinal$survEff)>=c(mean(c(resFinal$AllBird/resFinal$survEff))+sd(c(resFinal$AllBird/resFinal$survEff))),3,2))
@@ -219,7 +222,10 @@ birdHexesByEffort <- function(dataobs,
     
     finalCombined$risk <- factor(finalCombined$risk,  c("low","medium","high","veryhigh"))
     
-    # Plot results
+    # Save data 
+    st_write(finalCombined, paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp"))
+    
+    ######## Plot results
     studyareanew <- studyarea %>% st_crop(st_buffer(finalCombined, 100000))
     
     p1 <- ggplot() +
@@ -248,7 +254,61 @@ birdHexesByEffort <- function(dataobs,
     ggsave(filename = paste0(figfolder,"Map_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".png"), 
            plot = p1, width=12, height=8, units="in")
     
-    # Save data 
-    st_write(finalCombined, paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp"))
+    
+    ######### Bivariate color palette plot
+    finalNoBird <- finalCombined %>% dplyr::filter(DensBird == 0)
+    finalBird <- finalCombined %>% dplyr::filter(DensBird > 0)
+    
+    finalBird <- bi_class(finalBird, x = DensBird, y = AllShip, style = "quantile", dim = 3)
+    
+    p2 <- ggplot() +
+      geom_sf(data=studyareanew, fill="#fefeff", lwd=0) +
+      geom_sf(data=finalNoBird, fill="black") + 
+      geom_sf(data=finalBird,aes(fill = bi_class), show.legend = FALSE) +
+      bi_scale_fill(pal = "DkViolet2", dim = 3, flip_axes = TRUE) +
+      # xlab("") +
+      # ylab("") +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      ggtitle(ifelse(night == FALSE, paste0(taxaLabel, " - ", monthsname, " - All Traffic"), 
+                     paste0(taxaLabel, " - ", monthsname, " - Night Traffic"))) +
+      bi_theme() +
+      theme_bw() +
+      theme(text = element_text(size = 25),
+            axis.text=element_blank(),
+            panel.background = element_rect(fill = "black"),
+            panel.border =  element_rect(colour = "black"),
+            panel.grid.major = element_line(colour = "transparent")) 
+    
+    legend <- bi_legend(pal = "DkViolet2",
+                        dim = 3,
+                        xlab = "Bird Density",
+                        ylab = "Vessel Traffic",
+                        size = 14, flip_axes = TRUE)
+    
+    # Create white rectangles to obscure error boxes where arrows should be on legend
+    rect <- rectGrob(
+      x=0.57, 
+      y=.61,
+      width=0.015, height=0.015,
+      gp = gpar(fill = "white", alpha = 1, col="white")
+    )
+    rect2 <- rectGrob(
+      x=0.675, 
+      y=.425,
+      width=0.015, height=0.02,
+      gp = gpar(fill = "white", alpha = 1, col="white")
+    )
+    
+    p2Final <- ggdraw() +
+      draw_plot(p2, 0, 0, 1, 1) +
+      draw_plot(legend, x=0.50, y=.4, width=0.25, height=0.25) +
+      draw_grob(rect) +
+      draw_grob(rect2)
+    
+    # Save figure 
+    ggsave(filename = paste0(figfolder,"BiVariateMap_",taxaLabel,"_",monthsname,"_NightOnly",night,".png"), 
+           plot = p2Final, width=10, height=8, units="in")
+    
     }
 }
