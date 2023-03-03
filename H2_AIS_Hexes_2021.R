@@ -287,22 +287,20 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
       # Calculate average speed within hex grid 
       joinOut <- AISfilteredType %>%
         group_by(hexID) %>%
-        summarize(SOG = mean(SOG, na.rm=T),
-                  Sd = sd(SOG, na.rm=T),
-                  Len = mean(Length, na.rm=T), 
-                  nPt=n(), 
-                  Shp=length(unique(MMSI)),
+        summarize(Shp=length(unique(MMSI)),
                   OpD=length(unique(AIS_ID)))
+      joinOutDay <- AISfilteredType %>%
+        filter(timeofday != "night") %>% 
+        group_by(hexID) %>%
+        summarize(D_Shp=length(unique(MMSI)),
+                  D_OpD=length(unique(AIS_ID)))
       joinOutNight <- AISfilteredType %>%
         filter(timeofday == "night") %>% 
         group_by(hexID) %>%
-        summarize(N_SOG = mean(SOG, na.rm=T),
-                  N_Sd = sd(SOG, na.rm=T),
-                  N_Len = mean(Length, na.rm=T), 
-                  N_nPt=n(), 
-                  N_Shp=length(unique(MMSI)),
+        summarize(N_Shp=length(unique(MMSI)),
                   N_OpD=length(unique(AIS_ID)))
       joinOutNew <- left_join(joinOut, joinOutNight, by=c("hexID"))
+      joinOutNew <- left_join(joinOutNew, joinOutDay, by=c("hexID"))
       joinOutNew <- joinOutNew %>% 
         mutate_at(c(1:ncol(joinOutNew)), ~replace_na(.,0))
     }
@@ -313,7 +311,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
         group_by(hexID) %>%
         summarize(SOG=mean(SOG, na.rm=T),
                   Sd = sd(SOG, na.rm=T),
-                  Len = mean(Length, na.rm=T), 
+                  Len = mean(DimLength, na.rm=T), 
                   nPt=n(), 
                   nShp =length(unique(MMSI)),
                   OpD=length(unique(AIS_ID)))
@@ -324,25 +322,24 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
     hexgrid <- left_join(hexgrid, joinOutNew, by="hexID")
   }
   
+  # Calculate summary stats for all ship types in aggregate
   # Calculate average speed within hex grid 
   allShips <- AISjoined %>%
     group_by(hexID) %>%
-    summarize(SOG=mean(SOG, na.rm=T),
-              Sd = sd(SOG, na.rm=T),
-              Len = mean(Length, na.rm=T), 
-              nPt=n(), 
-              nShp=length(unique(MMSI)),
+    summarize(nShp=length(unique(MMSI)),
               OpD=length(unique(AIS_ID)))
+  allShipsDay <- AISjoined %>%
+    filter(timeofday == "night") %>% 
+    group_by(hexID) %>%
+    summarize(D_nShp =length(unique(MMSI)),
+              D_OpD=length(unique(AIS_ID)))
   allShipsNight <- AISjoined %>%
     filter(timeofday == "night") %>% 
     group_by(hexID) %>%
-    summarize(N_SOG = mean(SOG, na.rm=T),
-              N_Sd = sd(SOG, na.rm=T),
-              N_Len = mean(Length, na.rm=T), 
-              N_nPt = n(), 
-              N_nShp =length(unique(MMSI)),
+    summarize(N_nShp =length(unique(MMSI)),
               N_OpD=length(unique(AIS_ID)))
   allShipsNew <- left_join(allShips, allShipsNight, by=c("hexID"))
+  allShipsNew <- left_join(allShipsNew, allShipsDay, by=c("hexID"))
   
   colnames(allShipsNew)[2:ncol(allShipsNew)] <- paste0(colnames(allShipsNew)[2:ncol(allShipsNew)],"_Al")
   
@@ -350,7 +347,6 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   
   hexgrid$year <- yr
   hexgrid$month <- mnth
-  
   
   
   print(paste("Finished hex calcs ",yr, mnth))
