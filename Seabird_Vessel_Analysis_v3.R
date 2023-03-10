@@ -17,6 +17,9 @@
 library(tidyverse)
 library(sf)
 library(rnaturalearth)
+library(biscale)
+library(cowplot)
+library(ggpubr)
 
 ################################
 #### Read in Raw Data Files #### 
@@ -45,7 +48,13 @@ loc <- read.csv("../Data_Raw/NPPSD_v4.0/Locations_NPPSDv4.csv")
 datobs <- read.csv("../Data_Raw/NPPSD_v4.0/Observations_NPPSDv4.csv")
 
 # Load in basemap for plots
-studyarea <- st_read("../Data_Raw/AK_CAN_RUS/AK_CAN_RUS.shp") 
+basemap <- st_read("../Data_Raw/AK_CAN_RUS/AK_CAN_RUS.shp") 
+
+# study area
+kod <- st_read("../Data_Raw/KodiakPWS.shp")
+uni <- st_read("../Data_Raw/Unimak.shp")
+berstr <- st_read("../Data_Raw/BeringStrait.shp") %>% filter(Shape_Leng > 3000000) 
+npac <- st_as_sf(data.frame(name="Pacific Arctic", geometry= st_as_sfc(st_bbox(hexMask))))
 
 ###################################
 #### Specify Input Information #### 
@@ -53,17 +62,18 @@ studyarea <- st_read("../Data_Raw/AK_CAN_RUS/AK_CAN_RUS.shp")
 
 # Specify metric used to calculate vessel activity 
 metric <- "OperatingDays" # MUST be "OperatingDays" or "Ships"
+metricName <-"Operating Days"
 ## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
 ## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
 
-nightonly <- TRUE #If true, will only calculate nighttime vessel traffic (ignoring daytime)
+nightonly <- FALSE #If true, will only calculate nighttime vessel traffic (ignoring daytime)
 # If false, will calculate all vessel traffic, including both day and night
 
-months <- c(9:11) # Numeric value(s) of months to be included in the analysis
-# months <- c(6:8)
+# months <- c(9:11) # Numeric value(s) of months to be included in the analysis
+months <- c(6:8)
 
-monthsname <- "Fall" # Text label describing the numeric months in the analysis (e.g., "Summer", "Annual")
-# monthsname <- "Summer" 
+# monthsname <- "Fall" # Text label describing the numeric months in the analysis (e.g., "Summer", "Annual")
+monthsname <- "Summer"
 
 startyear <- 2006 # Earliest year for which bird observations will be included in the analysis 
 # NOTE: start year is for seabird observations only. Vessel traffic includes all data from 2015-2020
@@ -108,12 +118,12 @@ taxaList <- list(totalBirds, seaducks, shear,
                  guill, scoter, corm, loon, 
                  alba, duckswangoose, stormpet, nofu, 
                  kiei, larid, alcid)
-names(taxaList) <- c("AllBirds","Seaducks", "Shearwaters", 
-                     "Murre", "Auklet", "Phalarope", "Eider",
-                     "Murrelet", "Kittiwake", "Gull", "Puffin",
-                     "Guillemot", "Scoter","Cormorant","Loon", 
-                     "Albatross", "DuckSwanGoose","StormPetrel", "NorthernFulmar",
-                     "KingEider", "Larids", "Alcids")
+names(taxaList) <- c("Seabirds","Seaducks", "Shearwaters", 
+                     "Murres", "Auklets", "Phalaropes", "Eiders",
+                     "Murrelets", "Kittiwakes", "Gulls", "Puffins",
+                     "Guillemots", "Scoters","Cormorants","Loons", 
+                     "Albatross", "DuckSwanGoose","Storm Petrels", "Northern Fulmars",
+                     "King Eiders", "Larids", "Alcids")
 
 ###########################
 #### Load in Functions #### 
@@ -141,21 +151,58 @@ source("./Seabird_Vessel_Analysis_Functions.R")
 #                  night=nightonly)
 
 # For a list of species 
-lapply(1:length(taxaList), function(x){birdHexesByEffort(taxaNames= taxaList[[x]], 
-                              taxaLabel= names(taxaList[x]),
-                              hexMask=hexMask, 
-                              effortThreshold=effortThreshold, 
-                              loc=loc,
-                              mnths=months,
-                              mnthsnam=monthsname,
-                              startyr=startyear,
-                              savefolder=savefolder,
-                              figfolder=figfolder,
-                              filedir=hexList, 
-                              studyarea=studyarea,
-                              metric=metric, 
-                              night=nightonly)})
+# lapply(1:length(taxaList), function(x){birdHexesByEffort(taxaNames= taxaList[[x]], 
+#                               taxaLabel= names(taxaList[x]),
+#                               hexMask=hexMask, 
+#                               effortThreshold=effortThreshold, 
+#                               loc=loc,
+#                               mnths=months,
+#                               mnthsnam=monthsname,
+#                               startyr=startyear,
+#                               savefolder=savefolder,
+#                               figfolder=figfolder,
+#                               filedir=hexList, 
+#                               metric=metric, 
+#                               night=nightonly)})
 
+
+# Plots for entire study area 
+lapply(1:length(taxaList), function(x){tryCatch(plotResults(studyarea=npac, 
+                                                            studyareaname = "Pacific Arctic",
+                                                            basemap=basemap,
+                                                            figfolder=paste0(figfolder, "PacificArctic/"),
+                                                            monthsname=monthsname,
+                                                            taxaLabel=names(taxaList[x]),
+                                                            night=nightonly,
+                                                            metricName=metricName),error=function(e) NULL)})
+
+# Plots for Kodiak
+lapply(1:length(taxaList), function(x){tryCatch(plotResults(studyarea=kod, 
+                                                   studyareaname = "Kodiak",
+                                                   basemap=basemap,
+                                                   figfolder=paste0(figfolder, "Kodiak/"),
+                                                   monthsname=monthsname,
+                                                   taxaLabel=names(taxaList[x]),
+                                                   night=nightonly,
+                                                   metricName=metricName),error=function(e) NULL)})
+
+lapply(1:length(taxaList), function(x){tryCatch(plotResults(studyarea=uni, 
+                                                   studyareaname = "Unimak Pass",
+                                                   basemap=basemap,
+                                                   figfolder=paste0(figfolder, "Unimak/"),
+                                                   monthsname=monthsname,
+                                                   taxaLabel=names(taxaList[x]),
+                                                   night=nightonly,
+                                                   metricName=metricName),error=function(e) NULL)})
+
+lapply(1:length(taxaList), function(x){tryCatch(plotResults(studyarea=berstr, 
+                                                   studyareaname = "Bering Strait",
+                                                   basemap=basemap,
+                                                   figfolder=paste0(figfolder, "BeringStrait/"),
+                                                   monthsname=monthsname,
+                                                   taxaLabel=names(taxaList[x]),
+                                                   night=nightonly,
+                                                   metricName=metricName),error=function(e) NULL)})
 # night2 <- st_read("../Data_Processed/FinalDF_AllBirds_Fall_NightOnlyTRUE.shp")
 # allday2 <- st_read("../Data_Processed/FinalDF_AllBirds_Fall_NightOnlyFALSE.shp")
 # all.equal(night2, allday2)

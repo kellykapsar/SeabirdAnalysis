@@ -155,7 +155,6 @@ birdHexesByEffort <- function(dataobs,
                               savefolder,
                               figfolder,
                               filedir,
-                              studyarea,
                               metric, 
                               night){
   
@@ -209,106 +208,244 @@ birdHexesByEffort <- function(dataobs,
     resFinal$taxa <- taxaLabel
     
     # Join to vessel traffic data 
-    finalCombined <- resFinal %>%
+    df <- resFinal %>%
       left_join(y=hexFinal,by="hexID")
     
     # Evaluate risk levels 
-    finalCombined$risk <- ifelse(finalCombined$ClassBird == 1 & finalCombined$ClassShip == 1, "low",
-                ifelse(finalCombined$ClassBird == 1 & finalCombined$ClassShip == 2 | finalCombined$ClassBird == 2 & finalCombined$ClassShip == 1, "medium",
-                ifelse(finalCombined$ClassBird == 1 & finalCombined$ClassShip == 3 | finalCombined$ClassBird == 3 & finalCombined$ClassShip == 1, "medium",
-                ifelse(finalCombined$ClassBird == 3 & finalCombined$ClassShip == 2 | finalCombined$ClassBird == 2 & finalCombined$ClassShip == 3, "high",
-                ifelse(finalCombined$ClassBird == 2 & finalCombined$ClassShip == 2, "high",
-                ifelse(finalCombined$ClassBird == 3 & finalCombined$ClassShip == 3, "veryhigh", NA))))))
+    df$risk <- ifelse(df$ClassBird == 1 & df$ClassShip == 1, "low",
+                ifelse(df$ClassBird == 1 & df$ClassShip == 2 | df$ClassBird == 2 & df$ClassShip == 1, "medium",
+                ifelse(df$ClassBird == 1 & df$ClassShip == 3 | df$ClassBird == 3 & df$ClassShip == 1, "medium",
+                ifelse(df$ClassBird == 3 & df$ClassShip == 2 | df$ClassBird == 2 & df$ClassShip == 3, "high",
+                ifelse(df$ClassBird == 2 & df$ClassShip == 2, "high",
+                ifelse(df$ClassBird == 3 & df$ClassShip == 3, "veryhigh", NA))))))
     
-    finalCombined$risk <- factor(finalCombined$risk,  c("low","medium","high","veryhigh"))
+    df$risk <- factor(df$risk,  c("low","medium","high","veryhigh"))
     
     # Save data 
-    st_write(finalCombined, paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp"))
-    
-    ######## Plot results
-    studyareanew <- studyarea %>% st_crop(st_buffer(finalCombined, 100000))
-    
-    p1 <- ggplot() +
-      geom_sf(data=studyareanew, fill="#fefeff", lwd=0) +
-      geom_sf(data=finalCombined,aes(fill = risk)) +
-      scale_fill_manual(values = c("low" = "#73b2ff",
-                                   "medium" = "#55fe01",
-                                   "high" = "#ffff01",
-                                   "veryhigh" = "#e31a1c"), 
-                        name="Risk", 
-                        labels = c("Low", "Medium", "High", "Very High")) +
-      xlab("") +
-      ylab("") +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
-      ggtitle(ifelse(night == FALSE, paste0(taxaLabel, " - ", monthsname, " - All Traffic"), 
-                     paste0(taxaLabel, " - ", monthsname, " - Night Traffic"))) +
-      theme_bw() +
-      theme(text = element_text(size = 25),
-            axis.text=element_blank(),
-            panel.background = element_rect(fill = "#bcc7dd"),
-            panel.border =  element_rect(colour = "black"),
-            panel.grid.major = element_line(colour = "transparent"))
-    
-    # Save figure 
-    ggsave(filename = paste0(figfolder,"Map_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".png"), 
-           plot = p1, width=12, height=8, units="in")
-    
-    
-    ######### Bivariate color palette plot
-    finalNoBird <- finalCombined %>% dplyr::filter(DensBird == 0)
-    finalBird <- finalCombined %>% dplyr::filter(DensBird > 0)
-    
-    finalBird <- bi_class(finalBird, x = DensBird, y = AllShip, style = "quantile", dim = 3)
-    
-    p2 <- ggplot() +
-      geom_sf(data=studyareanew, fill="#fefeff", lwd=0) +
-      geom_sf(data=finalNoBird, fill="black") + 
-      geom_sf(data=finalBird,aes(fill = bi_class), show.legend = FALSE) +
-      bi_scale_fill(pal = "DkViolet2", dim = 3, flip_axes = TRUE) +
-      # xlab("") +
-      # ylab("") +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
-      ggtitle(ifelse(night == FALSE, paste0(taxaLabel, " - ", monthsname, " - All Traffic"), 
-                     paste0(taxaLabel, " - ", monthsname, " - Night Traffic"))) +
-      bi_theme() +
-      theme_bw() +
-      theme(text = element_text(size = 25),
-            axis.text=element_blank(),
-            panel.background = element_rect(fill = "black"),
-            panel.border =  element_rect(colour = "black"),
-            panel.grid.major = element_line(colour = "transparent")) 
-    
-    legend <- bi_legend(pal = "DkViolet2",
-                        dim = 3,
-                        xlab = "Bird Density",
-                        ylab = "Vessel Traffic",
-                        size = 14, flip_axes = TRUE)
-    
-    # Create white rectangles to obscure error boxes where arrows should be on legend
-    rect <- rectGrob(
-      x=0.57, 
-      y=.61,
-      width=0.015, height=0.015,
-      gp = gpar(fill = "white", alpha = 1, col="white")
-    )
-    rect2 <- rectGrob(
-      x=0.675, 
-      y=.425,
-      width=0.015, height=0.02,
-      gp = gpar(fill = "white", alpha = 1, col="white")
-    )
-    
-    p2Final <- ggdraw() +
-      draw_plot(p2, 0, 0, 1, 1) +
-      draw_plot(legend, x=0.50, y=.4, width=0.25, height=0.25) +
-      draw_grob(rect) +
-      draw_grob(rect2)
-    
-    # Save figure 
-    ggsave(filename = paste0(figfolder,"BiVariateMap_",taxaLabel,"_",monthsname,"_NightOnly",night,".png"), 
-           plot = p2Final, width=10, height=8, units="in")
-    
-    }
+    st_write(df, paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp"))
+  }
 }
+
+#### Results Plots #### 
+plotResults <- function(basemap,
+                        studyarea,
+                        studyareaname, 
+                        figfolder,
+                        monthsname,
+                        taxaLabel,
+                        night,
+                        metricName){
+
+  # Load in data file
+  dfname <- paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp")
+  
+  if(!file.exists(dfname)){
+    stop("Combined dataframe does not exist. Try running birdHexesByEffort function first.")
+  }
+  
+  df <- st_read(dfname)  %>% st_crop(studyarea)
+  
+  # Prep basemap  
+  basemapnew <- basemap %>% st_crop(studyarea, 100000)
+  
+  finalNoBird <- df %>% dplyr::filter(DensBird == 0)
+  finalBird <- df %>% dplyr::filter(DensBird > 0)
+  
+  if(length(finalBird$hexID) == 0){stop(paste0("No ", taxaLabel, " were found in this study area."))}
+  
+  finalBird <- bi_class(finalBird, x = DensBird, y = AllShip, style = "quantile", dim = 3)
+  bs <- bi_class_breaks(finalBird, x = DensBird, y = AllShip, style = "quantile", dim = 3, split=TRUE)
+  bs <- lapply(bs, function(x){round(x,2)})  
+    
+  #### Traffic plot ####
+  traffplotname <- paste0(figfolder,"TrafficPlots/TrafficDensity_", studyareaname,"_",monthsname,"_NightOnly",night,".png")
+  
+  p0 <- ggplot() +
+    geom_sf(data=basemapnew, fill="#8ba761", lwd=0) +
+    geom_sf(data=df,aes(fill = AllShip), color="lightgray") +
+    scale_fill_continuous(trans="log",low = "yellow", high = "red", labels=scales::comma, name="Total \nOperating Days") + 
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
+    theme_bw() +
+    theme(text = element_text(size = 18),
+          plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5), 
+          plot.caption = element_text(size = 8, hjust=0),
+          axis.text=element_blank(),
+          panel.background = element_rect(fill = "#73b2ff"),
+          panel.border =  element_rect(colour = "black"),
+          panel.grid.major = element_line(colour = "transparent")) 
+    
+    ifelse(night == TRUE, 
+      p0alone <- p0 + ggtitle(label = paste0("Nighttime Vessel Traffic Intensity\n", studyareaname), 
+                   subtitle = paste0("(",monthsname," 2015-2022)")), 
+      p0alone <- p0 + ggtitle(label = paste0("Vessel Traffic Intensity\n", studyareaname), 
+                         subtitle = paste0("(",monthsname," 2015-2022)")) 
+    )
+    
+    # Save figure 
+    if(!file.exists(traffplotname)){
+      ggsave(filename = traffplotname, plot = p0alone, width=10, height=8, units="in")
+    }
+
+  #### Risk plot ####
+  riskplotname <- paste0(figfolder,"RiskPlots/RiskMap_", studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
+  
+  df$risk <- factor(df$risk, levels=c("low", "medium", "high", "veryhigh"))
+  
+  p1 <- ggplot() +
+    geom_sf(data=basemapnew, fill="#fefeff", lwd=0) +
+    geom_sf(data=df,aes(fill = risk)) +
+    scale_fill_manual(values = c("low" = "#73b2ff",
+                                 "medium" = "#55fe01",
+                                 "high" = "#ffff01",
+                                 "veryhigh" = "#e31a1c"), 
+                      name="Risk", 
+                      labels = c("Low", "Medium", "High", "Very High")) +
+    xlab("") +
+    ylab("") +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    theme_bw() +
+    theme(text = element_text(size = 18),
+          plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5), 
+          plot.caption = element_text(size = 8, hjust=0),
+          axis.text=element_blank(),
+          panel.background = element_rect(fill = "#bcc7dd"),
+          panel.border =  element_rect(colour = "black"),
+          panel.grid.major = element_line(colour = "transparent"))
+  
+  ifelse(night == TRUE, 
+         p1alone <- p1 + ggtitle(label = paste0(taxaLabel, " and Nighttime Vessel Traffic\n", studyareaname), 
+                            subtitle = paste0("(",monthsname," 2015-2022)")), 
+         p1alone <- p1 + ggtitle(label = paste0(taxaLabel, " and Vessel Traffic\n", studyareaname), 
+                            subtitle = paste0("(",monthsname," 2015-2022)")))
+  
+  # Save figure 
+  if(!file.exists(riskplotname)){
+    ggsave(filename = riskplotname,
+           plot = p1alone, width=12, height=8, units="in")
+  }
+  
+  #### Bivariate plot ####
+  bivarplotname <- paste0(figfolder,"BivariatePlots/BiVariateMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
+  bivarlegendname <- paste0(figfolder,"BivariatePlots/BiVariateMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,"_Legend.png")
+  
+  p2 <- ggplot() +
+    geom_sf(data=basemapnew, fill="#8ba761", lwd=0) +
+    geom_sf(data=finalNoBird, fill="#73b2ff", color="lightgray") + 
+    geom_sf(data=finalBird,aes(fill = bi_class), color="lightgray", show.legend = FALSE) +
+    bi_scale_fill(pal = "PurpleOr", dim = 3) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    labs(caption = paste0("*Empty hexes were surveyed, but no ", taxaLabel, " were sighted during study period.")) + 
+    bi_theme() +
+    theme_bw() +
+    theme(text = element_text(size = 18),
+          plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5), 
+          plot.caption = element_text(size = 8, hjust=0),
+          axis.text=element_blank(),
+          panel.background = element_rect(fill = "#73b2ff"),
+          panel.border =  element_rect(colour = "black"),
+          panel.grid.major = element_line(colour = "transparent")) 
+  
+  ifelse(night == TRUE, 
+         p2alone <- p2 + ggtitle(label = paste0(taxaLabel, " and Nighttime Vessel Traffic\n", studyareaname), 
+                            subtitle = paste0("(",monthsname," 2015-2022)")), 
+         p2alone <- p2 + ggtitle(label = paste0(taxaLabel, " and Vessel Traffic\n", studyareaname), 
+                            subtitle = paste0("(",monthsname," 2015-2022)")))
+  
+  legend <- bi_legend(pal = "PurpleOr",
+                      dim = 3,
+                      xlab = "Bird Density",
+                      ylab = "Vessel Traffic",
+                      size = 10, 
+                      breaks = bs, 
+                      arrows=TRUE)
+  leggrob <- ggplotGrob(legend)
+  
+  # Can't figure out how to draw legend onto plot for different study areas so going to disable this and 
+  # save legend separately for now. 
+  
+  # p2Final <- ggdraw() +
+  #   draw_plot(p2, 0, 0, 1, 1) 
+  # 
+  # p2Final <- p2Final + draw_plot(legend + theme(plot.background = element_rect(fill = "#8ba761", color = NA), 
+  #                                                 text = element_text(color = "black")), x=0.65, y=.38, width=0.25, height=0.265) # +
+
+
+  # Save figure 
+  if(!file.exists(bivarplotname)){
+    ggsave(filename = bivarplotname,
+           plot = p2alone, width=10, height=8, units="in")
+  
+    ggsave(filename = bivarlegendname,
+           plot = legend, width=2, height=2, units="in")
+  }
+  
+  #### Bird density plot ####
+  birdplotname <- paste0(figfolder,"BirdDensityPlots/DensityMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
+  
+  p3 <- ggplot() +
+    geom_sf(data=basemapnew, fill="#8ba761", lwd=0) +
+    geom_sf(data=finalNoBird, fill="#73b2ff", color="lightgray") + 
+    geom_sf(data=finalBird,aes(fill = DensBird), color="lightgray") +
+    scale_fill_continuous(trans="log",low = "yellow", high = "red", labels=scales::number_format(), name="Density \n(Ind'ls/km\u00b2)") + 
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    labs(caption = paste0("*Empty hexes were surveyed, but no ", taxaLabel, " were sighted during study period.")) + 
+    theme_bw() +
+    theme(text = element_text(size = 18),
+          plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5), 
+          plot.caption = element_text(size = 8, hjust=0),
+          axis.text=element_blank(),
+          panel.background = element_rect(fill = "#73b2ff"),
+          panel.border =  element_rect(colour = "black"),
+          panel.grid.major = element_line(colour = "transparent")) 
+  
+  p3alone <- p3 + ggtitle(label = paste0("Effort-weighted density of ", taxaLabel), 
+                              subtitle = paste0("(",monthsname,")"))
+  
+  # Save figure
+  if(!file.exists(birdplotname)){
+    ggsave(filename = birdplotname,
+           plot = p3alone, width=10, height=8, units="in")
+  }
+
+  #### Combo plot ####
+  
+  comboname <- paste0(figfolder,"ComboPlot_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
+  
+  # Set matrix for layout of plots 1-5
+  lay <- rbind(c(1,1,1,2,3,3,3,3),
+               c(4,4,4,4,5,5,5,5))
+  
+  # Turn plots into "graphical objects" (aka grobs)
+  p2g <- as_grob(p2)
+  p1g <- as_grob(p1)
+  p3g <- as_grob(p3)
+  p0g <- as_grob(p0)
+  
+  # Arrange grobs by layout 
+  combo <- grid.arrange(grobs=gList(p2g, leggrob, p1g, p3g, p0g), layout_matrix=lay)
+  
+  # Add custom title 
+  titletext <-  ifelse(night == TRUE, 
+        paste0(taxaLabel, " and Nighttime Vessel Traffic\n", studyareaname, " (",monthsname," 2015-2022)"), 
+        paste0(taxaLabel, " and Vessel Traffic\n", studyareaname, " (",monthsname," 2015-2022)"))
+  
+  combofinal <- annotate_figure(combo, top=text_grob(titletext, color = "black", face = "bold", size = 20))
+  
+  # Make panel background white
+  combofinal <- combofinal + theme(panel.background = element_rect(fill = "white"))
+  
+  # Save output 
+  ggsave(filename = comboname,
+         plot = combofinal, width=18, height=10, units="in")
+}
+
+  
