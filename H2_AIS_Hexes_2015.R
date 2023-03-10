@@ -352,7 +352,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
     summarize(nShp=length(unique(MMSI)),
               OpD=length(unique(AIS_ID)))
   allShipsDay <- AISjoined %>%
-    filter(timeofday == "night") %>% 
+    filter(timeofday != "night") %>% 
     group_by(hexID) %>%
     summarize(D_nShp =length(unique(MMSI)),
               D_OpD=length(unique(AIS_ID)))
@@ -378,7 +378,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   
   # Save data in vector format
   # write_sf(hexgrid, paste0("../Data_Processed_TEST/Hex/SpeedHex_",MoName,"_",ndays,".shp"))
-  write_sf(hexgrid, paste0("../Data_Processed/Hex/Hex_",MoName,"_NightOnly",nightonly,".shp"))
+  write_sf(hexgrid, paste0("../Data_Processed/Hex/Hex_",MoName,"_DayNight",nightonly,".shp"))
   # write_sf(AISjoined, paste0("../Data_Processed_TEST/Hex/SpeedPts_",MoName,"_",ndays,".shp"))
   # write_sf(hexpts, paste0("../Data_Processed_TEST/Hex/SpeedPts_",MoName,".shp"))
   
@@ -389,10 +389,10 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   runtimes$runtime <- (proc.time() - starttime)[[3]]
   runtimes$runtime_min <- runtimes$runtime/60 
 
-  write.csv(metadata, paste0("../Data_Processed/Hex/HexMetadata_",MoName,"_NightOnly",nightonly,".csv"))
+  write.csv(metadata, paste0("../Data_Processed/Hex/HexMetadata_",MoName,"_DayNight",nightonly,".csv"))
   
   
-  write.csv(runtimes, paste0("../Data_Processed/Hex/HexRuntimes_",MoName,"_NightOnly",nightonly,".csv"))
+  write.csv(runtimes, paste0("../Data_Processed/Hex/HexRuntimes_",MoName,"_DayNight",nightonly,".csv"))
   # write.csv(runtimes, paste0("../Data_Processed_TEST/Hex/Runtimes_SpeedHex_",MoName,"_",ndays,".csv"))
   # print(runtimes)
   # return(runtimes)
@@ -415,11 +415,11 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
 # jan <- files[grepl("-01-", files)]
 # 
 # csvList <- jan[27:28]
-# 
-# # # Separate file names into monthly lists
-# # jun <- files[grepl("-06-", files)]
-# # 
-# # csvList <- jun[27:28]
+
+# # Separate file names into monthly lists
+# jun <- files[grepl("-06-", files)]
+#
+# csvList <- jun[27:28]
 # 
 # # Run the speed hex creation script
 # starthex1 <- proc.time()
