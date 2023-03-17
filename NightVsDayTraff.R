@@ -33,8 +33,9 @@ figfolder <- "../Figures/"
 hexdir <- "D:/AIS_V2_DayNight_60km6hrgap/Hex_DayNight/"
 hexList <-list.files(hexdir, pattern=".shp", full.names=TRUE)
 
-# Read in blank hexagon template 
-# hex <- st_read("../Data_Raw/BlankHexes.shp")
+# Read in data 
+temp <- lapply(hexList, function(x){st_read(x) %>% st_drop_geometry()})
+hexAll <- do.call(rbind, temp)
 
 # Read in a custom-created hexagon mask, which masks out all parts of hexagons that are land and calculates
 # total marine area. This will be useful in calculating survey effort.
@@ -43,87 +44,55 @@ hexMask <- st_read("../Data_Raw/hex_x_ocean/hex_x_ocean.shp") %>%
   mutate(AreaKM = c(st_area(.)/1000000)) 
 
 # Load in basemap for plots
-studyarea <- st_read("../Data_Raw/AK_CAN_RUS/AK_CAN_RUS.shp")
-
-
-###################################
-#### Specify Input Information #### 
-###################################
-
-# Specify metric used to calculate vessel activity 
-metric <- "OperatingDays" # MUST be "OperatingDays" or "Ships"
-## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
-## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
-
-nightonly <- TRUE #If true, will only calculate nighttime vessel traffic (ignoring daytime)
-# If false, will calculate all vessel traffic, including both day and night
-
-months <- c(9:11) # Numeric value(s) of months to be included in the analysis
-# months <- c(6:8)
-
-monthsname <- "Fall" # Text label describing the numeric months in the analysis (e.g., "Summer", "Annual")
-# monthsname <- "Summer"
-
-###########################
-#### Load in Functions #### 
-###########################
-
-source("./Seabird_Vessel_Analysis_Functions.R")
-
-
-jan <- st_read(hexList[[1]]) %>% dplyr::select(hexID, year, month, N_OpD_Al, OpD_Al)
-
-# Read in data 
-temp <- lapply(hexList, function(x){st_read(x) %>% st_drop_geometry()})
-hexAll <- do.call(rbind, temp)
-
-hexAll$ND_prop <- hexAll$N_OpD_Al/hexAll$D_OpD_Al
-
-summary(hexAll$ND_prop)
-
+studyarea <- st_read("../Data_Raw/AK_CAN_RUS/AK_CAN_RUS.shp") %>% st_crop(st_buffer(hexMask, 100000))
 
 ##########################################################
+# Calculate proportion of night per hex per month  
+##########################################################
 
-# Calculate the latitude for the centroid of each hex (to be used in daylight calculations)
-hexcent <- st_read(hexList[[1]]) %>% dplyr::select(hexID) %>% st_transform(4326)
-hexcent$lat <- st_coordinates(st_centroid(hexcent))[,"Y"]
-hexcent <- st_drop_geometry(hexcent)
+# # Calculate the latitude for the centroid of each hex (to be used in daylight calculations)
+# hexcent <- st_read(hexList[[1]]) %>% dplyr::select(hexID) %>% st_transform(4326)
+# hexcent$lat <- st_coordinates(st_centroid(hexcent))[,"Y"]
+# hexcent <- st_drop_geometry(hexcent)
+# 
+# # Select metrics and calculate julian dates of month for sunlight calculations
+# hexdat <- hexAll %>%
+#   # dplyr::select(hexID, year, month, N_OpD_Al, D_OpD_Al, OpD_Al) %>%
+#   left_join(., hexcent, by=c("hexID" = "hexID")) %>%
+#   mutate(date =  as.POSIXct(strptime(paste0(year, "-", month, "-01"),format="%Y-%m-%d", tz="UTC")),
+#          jdatestart = as.numeric(as.character(format(date, "%j"))),
+#          ndayspermnth = lubridate::days_in_month(date),
+#          jdateend = (jdatestart + ndayspermnth-1))
+# 
+# # Calculate the average proportion of daytime in each hex in each month
+# hexdat$propnight <- NA
+# for(i in 1:length(hexdat$hexID)){
+#   print(i)
+#   hexdat$propnight[i] <- mean(chillR::daylength(latitude = hexdat$lat[i],
+#                                                    JDay = hexdat$jdatestart[i]:hexdat$jdateend[i])$Daylength)
+# }
+# 
+# # Replace NA values with zero
+# hexdat[is.na(hexdat)] <- 0
+# 
+# # Convert to proportion night
+# hexdat$propnight <- 1-hexdat$propnight/24
+# 
+# # Calculate proportion of vessel traffic at night
+# hexdat$propnighttraff <- hexdat$N_OpD_Al/hexdat$OpD_Al
+# 
+# # Save results (for loop above takes a while to run)
+# saveRDS(hexdat, "./hexdat.rds")
 
-# Select metrics and calculate julian dates of month for sunlight calculations
-nightprop <- hexAll %>%
-  dplyr::select(hexID, year, month, N_OpD_Al, D_OpD_Al, OpD_Al) %>%
-  left_join(., hexcent, by=c("hexID" = "hexID")) %>%
-  mutate(date =  as.POSIXct(strptime(paste0(year, "-", month, "-01"),format="%Y-%m-%d", tz="UTC")),
-         jdatestart = as.numeric(as.character(format(date, "%j"))),
-         ndayspermnth = lubridate::days_in_month(date),
-         jdateend = (jdatestart + ndayspermnth-1))
-
-# Calculate the average proportion of daytime in each hex in each month
-nightprop$propnight <- NA
-for(i in 1:length(nightprop$hexID)){
-  print(i)
-  nightprop$propnight[i] <- mean(chillR::daylength(latitude = nightprop$lat[i],
-                                                   JDay = nightprop$jdatestart[i]:nightprop$jdateend[i])$Daylength)
-}
-
-
-# Replace NA values with zero
-nightprop[is.na(nightprop)] <- 0
-
-# Convert to proportion night
-nightprop$propnight <- 1-nightprop$propnight/24
-
-# Calculate proportion of vessel traffic at night
-nightprop$propnighttraff <- nightprop$N_OpD_Al/nightprop$OpD_Al
-
-# Save results (for loop above takes a while to run)
-saveRDS(nightprop, "./nightprop.rds")
-nightprop <-readRDS("./nightprop.rds")
+#########################################################################
+# Evaluate differences between daytime and nighttime vessel traffic  
+#########################################################################
+hexdat <-readRDS("./hexdat.rds")
 
 # Remove hexes with no vessel traffic and combine years to look at monthly data
-nightpropall <- nightprop %>%
+hexdatall <- hexdat %>%
   filter(OpD_Al > 0) %>%
-  group_by(hexID, month) %>%
+  group_by(hexID) %>%
   summarize(N_OpD_Al = sum(N_OpD_Al),
             D_OpD_Al = sum(D_OpD_Al),
             OpD_Al = sum(OpD_Al),
@@ -133,74 +102,134 @@ nightpropall <- nightprop %>%
   ungroup()
 
 # Check to make sure date calculations worked
-unique(nightprop[c("month", "ndayspermnth", "jdatestart", "jdateend")])
+unique(hexdat[c("month", "ndayspermnth", "jdatestart", "jdateend")])
 
 #### Remove hexes with insufficient vessel traffic that would skew proportions 
-nightpropnew <- nightpropall %>% filter(OpD_Al > 100, !propnight %in% c(0,1))
+hexdatnew <- hexdatall %>% filter(OpD_Al > 100, !propnight %in% c(0,1))
 
 # Calculate ratio of day to night traffic
-nightpropnew$daynight <- nightpropnew$D_OpD_Al/nightpropnew$N_OpD_Al
-nightpropnew$subtract <- nightpropnew$D_OpD_Al - nightpropnew$N_OpD_Al
-summary(nightpropnew$daynight)
-summary(nightpropnew$subtract)
-hist(nightpropnew$subtract)
+hexdatnew$daynight <- hexdatnew$D_OpD_Al/hexdatnew$N_OpD_Al
+hexdatnew$subtract <- hexdatnew$D_OpD_Al - hexdatnew$N_OpD_Al
+summary(hexdatnew$daynight)
+summary(hexdatnew$subtract)
+hist(hexdatnew$subtract)
+
+# Get hexIDs for top 10% of values for day-night traff
+topday <- hexdatnew %>% 
+  arrange(desc(subtract)) %>% 
+  slice_head(prop=0.05) 
+
+topnight <- hexdatnew %>% 
+  arrange(subtract) %>% 
+  slice_head(prop=0.05) 
+
+dayonly <- topday[!topday$hexID %in% topnight$hexID,]
+nightonly <- topnight[!topnight$hexID %in% topday$hexID,]
+
+length(unique(nightonly$hexID))
+length(unique(dayonly$hexID))
+
+length(which(topday$hexID %in% topnight$hexID))
+length(which(topnight$hexID %in% topday$hexID))
+
+topdaysf <- topday  %>% left_join(hexMask) %>% st_as_sf()
+topnightsf <- topnight  %>% left_join(hexMask) %>% st_as_sf()
+
+
+# Cells with the greatest difference in daytime and nighttime traffic 
+ggplot() +
+  geom_sf(data=studyarea, fill="#8ba761", lwd=0) +
+  geom_sf(data=topnightsf,aes(fill = OpD_Al), color="lightgray") +
+  scale_fill_continuous(trans="log",low = "yellow", high = "red", labels=scales::comma, name="Total \nOperating Days") + 
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
+  theme_bw() +
+  theme(text = element_text(size = 18),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5), 
+        plot.caption = element_text(size = 8, hjust=0),
+        axis.text=element_blank(),
+        panel.background = element_rect(fill = "#73b2ff"),
+        panel.border =  element_rect(colour = "black"),
+        panel.grid.major = element_line(colour = "transparent")) 
+
+# INDIVIDUAL CELL MAPS 
+ggplot() +
+  geom_sf(data=studyarea, fill="#8ba761", lwd=0) +
+  geom_sf(data=hexMask[hexMask$hexID == 1984,], fill="red", color="red") + # PUT HEXID HERE... 
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_bw() +
+  theme(text = element_text(size = 18),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5), 
+        plot.caption = element_text(size = 8, hjust=0),
+        axis.text=element_blank(),
+        panel.background = element_rect(fill = "#73b2ff"),
+        panel.border =  element_rect(colour = "black"),
+        panel.grid.major = element_line(colour = "transparent")) 
+
 
 #### Plots 
 
 # Histograms 
-ggplot(nightpropall, aes(x = propnight, color=month)) + geom_histogram()
-ggplot(nightpropnew, aes(x = propnight, color=month)) + geom_histogram()
+ggplot(hexdatall, aes(x = propnight)) + geom_histogram()
+ggplot(hexdatnew, aes(x = propnight)) + geom_histogram()
 
-ggplot(nightpropall, aes(x = propnighttraff, color=month)) + geom_histogram()
-ggplot(nightpropnew, aes(x = propnighttraff, color=month)) + geom_histogram()
+ggplot(hexdatall, aes(x = propnighttraff)) + geom_histogram()
+ggplot(hexdatnew, aes(x = propnighttraff)) + geom_histogram()
 
-ggplot(nightpropnew, aes(x = daynight, color=month)) + geom_histogram()
+ggplot(hexdatnew, aes(x = subtract)) + geom_histogram()
 
 # Proportion night vs. proportion nighttime vessel traffic 
 # Expect 1:1 correlation if no selection 
-ggplot(nightpropnew, aes(x = propnight, y = daynight)) +
-  geom_point(aes(color=month, size=OpD_Al))
+ggplot(hexdatnew, aes(x = propnight, y = daynight)) +
+  geom_point(aes(size=OpD_Al))
 
 # Proportion night vs. proportion nighttime vessel traffic colored by month
-ggplot(nightpropnew, aes(x = D_OpD_Al, y = N_OpD_Al)) +
-  geom_point(aes(color=month)) +
+ggplot(hexdatnew, aes(x = D_OpD_Al, y = N_OpD_Al)) +
+  geom_point() +
   stat_smooth(method="lm", se=TRUE) + 
   geom_abline(color="black", lwd=1)
 
-ggplot(nightpropnew, aes(x = D_OpD_Al, y = N_OpD_Al)) +
+ggplot(hexdatnew, aes(x = D_OpD_Al, y = N_OpD_Al)) +
   geom_point(aes(color=propnight)) +
   stat_smooth(method="lm", se=TRUE) + 
   geom_abline(color="black", lwd=1)
 
-ggplot(nightpropnew %>% filter(OpD_Al < 2000), aes(x = D_OpD_Al, y = N_OpD_Al)) +
+ggplot(hexdatnew %>% filter(OpD_Al < 2000), aes(x = D_OpD_Al, y = N_OpD_Al)) +
   geom_point(aes(color=propnight)) +
   stat_smooth(method="lm", se=TRUE) + 
   geom_abline(color="black", lwd=1)
 
-ggplot(nightpropnew %>% filter(OpD_Al < 500), aes(x = D_OpD_Al, y = N_OpD_Al)) +
+ggplot(hexdatnew %>% filter(OpD_Al < 500), aes(x = D_OpD_Al, y = N_OpD_Al)) +
   geom_point(aes(color=propnight)) +
   stat_smooth(method="lm", se=TRUE) + 
   geom_abline(color="black", lwd=1)
 
 # Proportion night vs. latitude colored by month
-ggplot(nightpropnew, aes(x = propnight, y = lat)) +
+ggplot(hexdatnew, aes(x = propnight, y = lat)) +
   geom_point(aes(color = month)) 
 
 # Proportion night vs. proportion nighttime vessel traffic colored by hexID
-ggplot(nightpropnew, aes(x = propnight, y = propnighttraff)) +
+ggplot(hexdatnew, aes(x = propnight, y = propnighttraff)) +
   geom_point(aes(color = hexID)) 
 
 # Models 
-m1 <- lm(propnighttraff~propnight, data=nightpropnew)
+m1 <- lm(N_OpD_Al~D_OpD_Al, data=hexdatnew)
 summary(m1)
 
-hist(residuals(m1))
+cor.test(~N_OpD_Al + D_OpD_Al, data=hexdatnew, method="spearman")
+cor(hexdatnew)
+
+hist(residuals(m1),  nbin=30)
 ggplot(m1, aes(x = resdiuals, color=month)) + geom_histogram()
 
 qqnorm(residuals(m1))
 qqline(residuals(m1))
 
-m2 <- t.test(x=nightpropnew$propnighttraff, y=nightpropnew$propnight)
+m2 <- t.test(x=hexdatnew$propnighttraff, y=hexdatnew$propnight)
 m2
 
 
