@@ -19,7 +19,7 @@
 # Function to spatially intersect at sea bird observations with vessel traffic hex grid
 # Also calculates survey effort within each hex during the time period 
 
-surveyEffort <- function(loc, datobs, hex, startyr, mnths, survfilename){
+birdDensity <- function(loc, datobs, hex, startyr, mnths, survfilename){
   # Drop observations that are too old or off-transect
   # Based on Kathy Kuletz's feedback, prior to 2007 is too old.
   loc <- loc %>%
@@ -95,7 +95,7 @@ surveyEffort <- function(loc, datobs, hex, startyr, mnths, survfilename){
 
 #### Vessel Activity #### 
 
-hexStack <- function(filedir, mnths, metric, night, trafffilename){
+traffDensity <- function(filedir, mnths, metric, night, trafffilename){
   
   # Isolate month values of interest from file names 
   hexes <- filedir[as.numeric(substr(filedir,10,11)) %in% mnths]
@@ -127,17 +127,8 @@ hexStack <- function(filedir, mnths, metric, night, trafffilename){
   
   hexRes$AllShip <- calcdis
   
-  # Calculate SD categories for each hex's vessel activity  
-  hexRes$QuantShip <- ecdf(calcdis)(calcdis)
-  
-  hexRes$ClassShip <- ifelse(hexRes$AllShip<mean(hexRes$AllShip),1,
-         ifelse(hexRes$AllShip>=c(mean(hexRes$AllShip)+sd(hexRes$AllShip)),3,2))
-  
-  # Isolate only columns of interest
-  hexFinal <- hexRes %>% dplyr::select(hexID, AllShip, QuantShip, ClassShip)
-  
   # Save results 
-  write.csv(hexFinal,trafffilename)
+  write.csv(hexRes,trafffilename)
 }
 
 #### Seabird Metrics #### 
@@ -151,6 +142,8 @@ birdHexesByEffort <- function(dataobs,
                               effortThreshold, 
                               mnths,
                               mnthsnam,
+                              studyarea, 
+                              studyareaname,
                               startyr,
                               savefolder,
                               figfolder,
@@ -162,55 +155,69 @@ birdHexesByEffort <- function(dataobs,
   trafffilename <- paste0(savefolder,"TraffInHexes_",mnthsnam,"_NightOnly", night,".csv")
   
   if(!file.exists(trafffilename)){
-    hexStack(filedir = hexList, mnths = mnths, metric = metric, night = night, trafffilename)
+    traffDensity(filedir = hexList, mnths = mnths, metric = metric, night = night, trafffilename)
   }
   
-  hexFinal <- read.csv(trafffilename)
+  traffdf <- read.csv(trafffilename)
   
   # Make sure survey effort has been calculated and saved for appropriate months and if not, generate it
   survfilename <- paste0(savefolder,"ObsInHexes_",monthsname,".shp")
   
   if(!file.exists(survfilename)){
-    surveyEffort(loc=loc, datobs=datobs, hex=hexMask, startyr=startyr, mnths=mnths, survfilename=survfilename)
+    birdDensity(loc=loc, datobs=datobs, hex=hexMask, startyr=startyr, mnths=mnths, survfilename=survfilename)
   }
-  res <- st_read(survfilename)
+  birddf <- st_read(survfilename)
   
   # Make sure this function has not already been run with these exact parameter specifications 
-  finaldfname <- paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp")
+  finaldfname <- paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp")
   
   if(!file.exists(finaldfname)){
     
+    # Crop data to study area     
+    birddf <- st_crop(birddf, studyarea)
+
+    ## Bird Risk Calculations
     # Select only hexes with sufficient survey effort
-    resGuild <- res %>%
+    birdGuild <- birddf %>%
       filter(as.numeric(survEff)>c(effortThreshold*as.numeric(AreaKM)))
     
     # Isolate taxa of interest and calculate total number of observations 
-    resGuildAll <- resGuild[,c(colnames(resGuild) %in% taxaNames)] %>%
+    birdGuildAll <- birdGuild[,c(colnames(birdGuild) %in% taxaNames)] %>%
       st_drop_geometry()
-    resGuild$AllBird <- rowSums(resGuildAll)
+    birdGuild$AllBird <- rowSums(birdGuildAll)
     
     # Stack just the relevant guilds, remove extraneous columns
-    resStacked <- resGuild %>%
+    birdStacked <- birdGuild %>%
       select(hexID,AllBird,survEff,AreaKM)
     
     # Calculate SD categories for each hex's effort-weighted seabird observations 
-    resFinal <- resStacked %>%
+    birdFinal <- birdStacked %>%
       mutate(QuantBird = ecdf(AllBird/survEff)(AllBird/survEff))
     
     # Calculate effort-weighted densities of seabirds (# birds per square km of surveyed area)
-    resFinal$DensBird <- c(resFinal$AllBird/resFinal$survEff)
+    birdFinal$DensBird <- c(birdFinal$AllBird/birdFinal$survEff)
     
     # Calculate effort-weighted classes for the number of observations 
-    resFinal$ClassBird <- ifelse(c(resFinal$AllBird/resFinal$survEff)<mean(c(resFinal$AllBird/resFinal$survEff)),1,
-                             ifelse(c(resFinal$AllBird/resFinal$survEff)>=c(mean(c(resFinal$AllBird/resFinal$survEff))+sd(c(resFinal$AllBird/resFinal$survEff))),3,2))
+    birdFinal$ClassBird <- ifelse(c(birdFinal$AllBird/birdFinal$survEff)<mean(c(birdFinal$AllBird/birdFinal$survEff)),1,
+                             ifelse(c(birdFinal$AllBird/birdFinal$survEff)>=c(mean(c(birdFinal$AllBird/birdFinal$survEff))+sd(c(birdFinal$AllBird/birdFinal$survEff))),3,2))
     
     # Create column to specify taxa of interest
-    resFinal$taxa <- taxaLabel
+    birdFinal$taxa <- taxaLabel
+    
+    # Select traffic data columns of interest
+    traffFinal <- traffdf %>% dplyr::select(hexID, AllShip)
     
     # Join to vessel traffic data 
-    df <- resFinal %>%
-      left_join(y=hexFinal,by="hexID")
+    df <- birdFinal %>%
+      left_join(y=traffFinal,by="hexID")
     
+    ## Vessel Risk Calculations
+    # Calculate SD categories for each hex's vessel activity
+    df$QuantShip <- ecdf(df$AllShip)(df$AllShip)
+
+    df$ClassShip <- ifelse(df$AllShip<mean(df$AllShip),1,
+                                ifelse(df$AllShip>=c(mean(df$AllShip)+sd(df$AllShip)),3,2))
+
     # Evaluate risk levels 
     df$risk <- ifelse(df$ClassBird == 1 & df$ClassShip == 1, "low",
                 ifelse(df$ClassBird == 1 & df$ClassShip == 2 | df$ClassBird == 2 & df$ClassShip == 1, "medium",
@@ -222,7 +229,7 @@ birdHexesByEffort <- function(dataobs,
     df$risk <- factor(df$risk,  c("low","medium","high","veryhigh"))
     
     # Save data 
-    st_write(df, paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp"))
+    st_write(df, paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp"))
   }
 }
 
