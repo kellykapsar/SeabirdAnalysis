@@ -17,37 +17,36 @@ library(sf)
 library(paletteer)
 
 # Combine all metadata files
-temphpcc <-paste0("../Data_Processed_Hex/Metadata/", 
-              list.files("../Data_Processed_Hex/Metadata", pattern='Metadata'))
-temphpcc <- lapply(temphpcc, read.csv)
-meta <- do.call(rbind, temphpcc)
-# st_write(meta, "../Data_Processed_Hex/Metadata/Metadata_SpeedHex_All.csv")
+hexdir <- "D:/AIS_V2_DayNight_60km6hrgap/Hex_DayNight/"
+hexList <-list.files(hexdir, pattern="Metadata", full.names=TRUE)
 
+# hexList <- lapply(hexList, read.csv)
+# meta <- do.call(bind_rows, hexList)
+# write.csv(meta, "D:/AIS_V2_DayNight_60km6hrgap/Hex_DayNight/Metadata_SpeedHex_All.csv")
+meta <- read.csv("D:/AIS_V2_DayNight_60km6hrgap/Hex_DayNight/Metadata_SpeedHex_All.csv")
 
 # Combine all runtimes files
-temphpcc2 <-paste0("../Data_Processed_Hex/Metadata/", 
-                  list.files("../Data_Processed_Hex/Metadata", pattern='Runtimes'))
-temphpcc2 <- lapply(temphpcc2, read.csv)
-runs <- do.call(rbind, temphpcc2)
-# st_write(runs, "../Data_Processed_Hex/Metadata/Runtimes_SpeedHex_All.csv")
+# hexList2 <-list.files(hexdir, pattern="Runtimes", full.names=TRUE)
+# hexList2 <- lapply(hexList2, read.csv)
+# runs <- do.call(bind_rows, hexList2)
+# write.csv(runs, "D:/AIS_V2_DayNight_60km6hrgap/Hex_DayNight/Runtimes_SpeedHex_All.csv")
+
+# Read in data from individual hexes 
+hexdat <-readRDS("./hexdat.rds") # Calculated in NightVsDayTraff.R script. 
+
 
 ###############################################################################################################
-
-meta <- read.csv("../Data_Processed_Hex/Metadata/Metadata_SpeedHex_ALL.csv")
 
 # Turn year and month columns into a date format
 meta$yrmnth <- as.Date(paste(meta$yr,meta$mnth,"01",sep="-"), format="%Y-%m-%d")
 
 # Number of unique vessels over time
 meta_long <- meta %>% 
-             dplyr::select(ntotal_pts, ntotal_mmsis, ntotal_aisids, yrmnth) %>% 
+             dplyr::select(ntotal_mmsis, yrmnth) %>% 
              gather(key="type", value="count", -yrmnth)
 
-type.labs <- c("Ships", "Operating Days", "Points")
-names(type.labs) <- c("ntotal_mmsis", "ntotal_aisids", "ntotal_pts")
-
-
-meta_long$count[which(meta_long$type == "ntotal_pts")] <- meta_long$count[which(meta_long$type == "ntotal_pts")]/1000000
+type.labs <- c("Ships")
+names(type.labs) <- c("ntotal_mmsis")
 
 
 p1 <- ggplot(meta_long, aes(x=yrmnth, y=count)) +
@@ -71,17 +70,17 @@ ggsave("D:/AlaskaConservation_AIS_20210225/Figures/NumberShipsPerMonth.png",widt
 
 # Shipping days by type over time
 longmeta_naisids <- meta %>% 
-  dplyr::select(yrmnth, ntank_aisids, nfish_aisids, ncargo_aisids, nother_aisids) %>% 
-  gather(key=type,value=naisids, ntank_aisids:nother_aisids)
+  dplyr::select(yrmnth, ntank_mmsis, nfish_mmsis, ncargo_mmsis, ntug_mmsis, npass_mmsis, nsail_mmsis, npleas_mmsis, nother_mmsis) %>% 
+  gather(key=type,value=nmmsis, ntank_mmsis:nother_mmsis)
 
-ggplot(longmeta_naisids, aes(x=yrmnth, y=naisids)) +
+ggplot(longmeta_naisids, aes(x=yrmnth, y=nmmsis)) +
   geom_line(aes(color=type), lwd=1)+
   scale_color_brewer(palette = "Dark2", name="Ship Type", 
-                     breaks=c("nfish_aisids", "nother_aisids", "ncargo_aisids", "ntank_aisids"), 
-                     labels=c("Fishing", "Other", "Cargo", "Tanker")) +
+                     breaks=c("ntank_mmsis", "nfish_mmsis", "ncargo_mmsis", "ntug_mmsis", "npass_mmsis", "nsail_mmsis", "npleas_mmsis", "nother_mmsis"), 
+                     labels=c("Tanker", "Fishing", "Cargo", "Other", "Tug", "Passenger", "Sailing", "Pleasure")) +
   xlab("Year") +
   scale_x_date(date_labels = "%Y", date_breaks="1 year", expand=c(0,0)) +
-  scale_y_continuous(expand=c(0,1000)) +
+  scale_y_continuous(expand=c(0,0)) +
   ylab("Operating days") + 
   theme_bw() +
   theme(text = element_text(size=30))
@@ -103,6 +102,13 @@ ggplot(longmeta_npts, aes(x=yrmnth, y=npts)) +
   ylab("Points") + 
   theme_bw() + 
   theme(text = element_text(size=30))
+
+# Shipping days by hex over time 
+ggplot(hexdat, aes(x=date, y=OpD_Al, group=hexID)) +
+  geom_line(alpha=0.5)
+
+ggplot(hexdat, aes(x=date, y=nShp_Al, group=hexID)) +
+  geom_line(alpha=0.5)
 
 
 
