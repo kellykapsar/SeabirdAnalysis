@@ -79,8 +79,8 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
                                  Length = length, 
                                  Width = width)
   
-  metadata$orig_MMSIs <- length(unique(AIScsv$MMSI))
-  metadata$orig_pts <- length(AIScsv$MMSI)
+  metadata$orig_MMSIs <- length(unique(AIScsvNew$MMSI))
+  metadata$orig_pts <- length(AIScsvNew$MMSI)
   
   runtimes$importtime <- (proc.time() - start)[[3]]/60
   
@@ -128,7 +128,10 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   metadata$aton_pts <- length(AIScsvDF2$MMSI)
   
   # Create AIS_ID field
-  AIScsvDF <- AIScsvDF2 %>% add_column(AIS_ID = paste0(AIScsvDF2$MMSI,"-",substr(AIScsvDF2$Time,1,8)))
+  AIScsvDF <- AIScsvDF2 %>% add_column(AIS_ID = paste0(AIScsvDF2$MMSI,"-",
+                                                       substr(AIScsvDF2$Time,1,4),
+                                                       substr(AIScsvDF2$Time,6,7),
+                                                       substr(AIScsvDF2$Time,9,10)))
   
   # Identify and remove frost flowers 
   # (i.e. multiple messages from the same exact location sporadically transmitted throughout the day)
@@ -378,8 +381,8 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
 ####################### RUNNING SPEED SCRIPT ####################### 
 ####################################################################
 
-# 
-# # Import hex grid
+
+# Import hex grid
 # hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
 # 
 # nightonly <- TRUE
@@ -458,15 +461,15 @@ mar <- files[grepl("exactEarth_202103", files)]
 apr <- files[grepl("exactEarth_202104", files)]
 may <- files[grepl("exactEarth_202105", files)]
 jun <- files[grepl("exactEarth_202106", files)]
-jul <- files[grepl("exactEarth_202107", files)]
-aug <- files[grepl("exactEarth_202108", files)]
-sep <- files[grepl("exactEarth_202109", files)]
-oct <- files[grepl("exactEarth_202110", files)]
-nov <- files[grepl("exactEarth_202111", files)]
-dec <- files[grepl("exactEarth_202112", files)]
+# jul <- files[grepl("exactEarth_202107", files)]
+# aug <- files[grepl("exactEarth_202108", files)]
+# sep <- files[grepl("exactEarth_202109", files)]
+# oct <- files[grepl("exactEarth_202110", files)]
+# nov <- files[grepl("exactEarth_202111", files)]
+# dec <- files[grepl("exactEarth_202112", files)]
 
 # Create a list of lists of all csv file names grouped by month
-csvsByMonth <- list(jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec)
+csvsByMonth <- list(jan, feb, mar, apr, may, jun)
 
 # Pull up hex grid
 hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
@@ -482,7 +485,7 @@ res=list()
 # foreach and %dopar% work together to implement the parallelization
 # note that you have to tell each core what packages you need (another reason to minimize library use), so it can pull those over
 # I'm using tidyverse since it combines dplyr and tidyr into one library (I think)
-res=foreach(i=1:12,.packages=c("maptools", "rgdal", "dplyr", "tidyr", "tibble", "sf", "foreach", "doParallel"),
+res=foreach(i=1:6,.packages=c("maptools", "rgdal", "dplyr", "tidyr", "tibble", "sf", "foreach", "doParallel"),
             .errorhandling='pass',.verbose=T,.multicombine=TRUE) %dopar% FWS.AIS.SpeedHex(csvList=csvsByMonth[[i]], hexgrid=hexgrid, nightonly=TRUE)
 # lapply(csvsByMonth, FWS.AIS)
 
