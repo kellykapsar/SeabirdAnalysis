@@ -173,9 +173,9 @@ birdHexesByEffort <- function(dataobs,
   
   if(!file.exists(finaldfname)){
     
-    # Crop data to study area     
-    birddf <- st_crop(birddf, studyarea)
-
+    # Isolate hexes within study area     
+    birddf <- birddf[st_contains(studyarea, birddf, sparse = FALSE),] 
+    
     ## Bird Risk Calculations
     # Select only hexes with sufficient survey effort
     birdGuild <- birddf %>%
@@ -244,7 +244,7 @@ plotResults <- function(basemap,
                         metricName){
 
   # Load in data file
-  dfname <- paste0(savefolder,"FinalDF_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp")
+  dfname <- paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp")
   
   if(!file.exists(dfname)){
     stop("Combined dataframe does not exist. Try running birdHexesByEffort function first.")
