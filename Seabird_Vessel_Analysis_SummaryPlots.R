@@ -22,7 +22,7 @@ df$den <- NA
 df$denpct <- NA
 
 for(i in 1:length(files)){
-  t <- st_read(files[37], quiet=T) %>% st_drop_geometry()
+  t <- st_read(files[i], quiet=T) %>% st_drop_geometry()
   df$nhex[i] <- length(t$hexID)
   df$risk[i] <- sum(t$risk %in% c("high", "veryhigh"))
   df$riskpct[i] <- round(df$risk[i]/df$nhex[i]*100, 2)
@@ -30,11 +30,23 @@ for(i in 1:length(files)){
   df$denpct[i] <- round(df$den[i]/df$nhex[i]*100, 2)
 }
 
-tnext <- 
+akallsumm <- st_read("../Data_Processed/FinalDF_All Alaska_Seabirds_Summer_NightOnlyFALSE.shp") %>% st_drop_geometry()
+akallfall <- st_read("../Data_Processed/FinalDF_All Alaska_Seabirds_Fall_NightOnlyFALSE.shp") %>% st_drop_geometry()
 
-ggplot(t, aes(x = log(DensBird)+1, y = log(AllShip)+1)) +
+# Log bird density vs. log vessel traffic
+akallsumm$risk <- factor(akallsumm$risk, levels = c("low", "medium", "high", "veryhigh"), labels = c("Low", "Medium", "High", "Very High"))
+
+risk_pal <- c("#73b2ff", "#55fe01", "#ffff01", "#e31a1c")
+names(risk_pal) <- levels(akallsumm$risk)
+
+ggplot(akallsumm, aes(x = DensBird, y = AllShip)) +
   geom_point(aes(color=risk)) +
-  theme(text = element_text(size=30)) 
+  scale_color_manual(values = risk_pal) +
+  scale_x_continuous(trans=scales::pseudo_log_trans(base = 10)) +
+  scale_y_continuous(trans=scales::pseudo_log_trans(base = 10)) +
+  theme(text = element_text(size=30))
+
+######
 
 ggplot(df, aes(x = denpct, y = riskpct)) +
   geom_point(aes(color=season)) +
@@ -54,5 +66,3 @@ p <- ggplot(df, aes(x=taxa, y=riskpct, fill=season)) +
 ggsave(filename = "../Figures/RiskBarGraph.png",
        plot = p, width=16, height=8, units="in")
 
-
-17/20
