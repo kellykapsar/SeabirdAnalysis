@@ -20,6 +20,8 @@ library(rnaturalearth)
 library(biscale)
 library(cowplot)
 library(ggpubr)
+library(grid)
+library(gridExtra)
 
 ################################
 #### Read in Raw Data Files #### 
@@ -46,9 +48,10 @@ datobs <- read.csv("../Data_Raw/NPPSD_v4.0/Observations_NPPSDv4.csv")
 basemap <- st_read("../Data_Raw/AK_CAN_RUS/AK_CAN_RUS.shp") 
 
 # study area
-kod <- st_read("../Data_Raw/KodiakPWS.shp")
+goa <- st_read("../Data_Raw/KodiakPWS.shp")
 uni <- st_read("../Data_Raw/Unimak.shp")
 berstr <- st_read("../Data_Raw/BeringStrait.shp") %>% filter(Shape_Leng > 3000000) 
+berchuk <- st_read("../Data_Raw/BerChukBeau.shp")
 npac <- st_as_sf(data.frame(name="All Alaska", geometry= st_as_sfc(st_bbox(hexMask))))
 
 ###################################
@@ -75,13 +78,9 @@ startyear <- 2006 # Earliest year for which bird observations will be included i
 
 effortThreshold <- 0.01 # Percentage area of each hex that has to be observed in order to include the hex in the analysis
 
-studyarea <- npac # Spatial range for which risk will be calculated (npac, kod, uni, berchuk)
-studyreaname <- "All Alaska" # Name of spatial range  
-
 # Save folder
 # Specify file path for folder where results will be saved
 savefolder <- "../Data_Processed/"
-figfolder <- "../Figures/"
 
 #####################################
 #### Seabird Species of Interest #### 
@@ -117,18 +116,30 @@ kiei <- c("KIEI")
 larid <- c(kitti, gull)
 alcid <- c(murre, auklet, guill, puffin)
 
-taxaList <- list(totalBirds, seaducks, shear, 
-                 murre, auklet, phal, eider,
-                 murrelet, kitti, gull, puffin, 
-                 guill, scoter, corm, loon, 
-                 alba, duckswangoose, stormpet, nofu, 
-                 kiei, larid, alcid)
-names(taxaList) <- c("Seabirds","Seaducks", "Shearwaters", 
-                     "Murres", "Auklets", "Phalaropes", "Eiders",
-                     "Murrelets", "Kittiwakes", "Gulls", "Puffins",
-                     "Guillemots", "Scoters","Cormorants","Loons", 
-                     "Albatross", "DuckSwanGoose","Storm Petrels", "Northern Fulmars",
-                     "King Eiders", "Larids", "Alcids")
+
+AllAKList <- list(totalBirds, seaducks, shear, 
+                  murre, auklet, phal, eider,
+                  murrelet, kitti, gull, puffin, 
+                  guill, scoter, corm, loon, 
+                  alba, duckswangoose, stormpet, nofu, 
+                  kiei, larid, alcid)
+
+  
+names(AllAKList) <- c("Seabirds","Seaducks", "Shearwaters", 
+                      "Murres", "Auklets", "Phalaropes", "Eiders",
+                      "Murrelets", "Kittiwakes", "Gulls", "Puffins",
+                      "Guillemots", "Scoters","Cormorants","Loons", 
+                      "Albatross", "DuckSwanGoose","Storm Petrels", "Northern Fulmars",
+                      "King Eiders", "Larids", "Alcids")
+
+AleutList <- list(alba)
+names(AleutList) <- c("Albatross")
+
+GOAList <- list(shear, stormpet)
+names(GOAList) <- c("Shearwaters", "Storm Petrels")
+
+BerChukList <- list(seaducks, shear, auklet)
+names(BerChukList) <- c("Seaducks", "Shearwaters", "Auklets")
 
 ###########################
 #### Load in Functions #### 
@@ -156,34 +167,109 @@ source("./Seabird_Vessel_Analysis_Functions.R")
 #                  night=nightonly)
 
 # For a list of species
-lapply(1:length(taxaList), function(x){birdHexesByEffort(taxaNames= taxaList[[x]],
-                              taxaLabel= names(taxaList[x]),
-                              hexMask=hexMask,
-                              effortThreshold=effortThreshold,
-                              loc=loc,
-                              mnths=months,
-                              mnthsnam=monthsname,
-                              studyarea=studyarea, 
-                              studyareaname = studyareaname,
-                              startyr=startyear,
-                              savefolder=savefolder,
-                              figfolder=figfolder,
-                              filedir=hexList,
-                              metric=metric,
-                              night=nightonly)})
+## ALEUTIANS
+lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
+                                                         taxaLabel= names(AllAKList[x]),
+                                                         hexMask=hexMask,
+                                                         effortThreshold=effortThreshold,
+                                                         loc=loc,
+                                                         mnths=months,
+                                                         mnthsnam=monthsname,
+                                                         studyarea=uni, 
+                                                         studyareaname = "Eastern Aleutians",
+                                                         figfolder="../Figures/Aleutians/",
+                                                         startyr=startyear,
+                                                         savefolder=savefolder,
+                                                         filedir=hexList,
+                                                         metric=metric,
+                                                         night=nightonly)})
+## GULF OF ALASKA
+lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
+                                                         taxaLabel= names(AllAKList[x]),
+                                                         hexMask=hexMask,
+                                                         effortThreshold=effortThreshold,
+                                                         loc=loc,
+                                                         mnths=months,
+                                                         mnthsnam=monthsname,
+                                                         studyarea=goa, 
+                                                         studyareaname = "Gulf of Alaska",
+                                                         figfolder="../Figures/GOA/",
+                                                         startyr=startyear,
+                                                         savefolder=savefolder,
+                                                         filedir=hexList,
+                                                         metric=metric,
+                                                         night=nightonly)})
+# NORTHERN BERING & CHUKCHI
+lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
+                                                         taxaLabel= names(AllAKList[x]),
+                                                         hexMask=hexMask,
+                                                         effortThreshold=effortThreshold,
+                                                         loc=loc,
+                                                         mnths=months,
+                                                         mnthsnam=monthsname,
+                                                         studyarea=berchuk, 
+                                                         studyareaname = "Northern Bering & Chukchi Seas",
+                                                         figfolder="../Figures/NorthBeringAndChukchi/",
+                                                         startyr=startyear,
+                                                         savefolder=savefolder,
+                                                         filedir=hexList,
+                                                         metric=metric,
+                                                         night=nightonly)})
+## ALL ALASKA 
+lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
+                                                         taxaLabel= names(AllAKList[x]),
+                                                         hexMask=hexMask,
+                                                         effortThreshold=effortThreshold,
+                                                         loc=loc,
+                                                         mnths=months,
+                                                         mnthsnam=monthsname,
+                                                         startyr=startyear,
+                                                         studyarea=npac, 
+                                                         studyareaname = "All Alaska",
+                                                         figfolder="../Figures/AllAlaska/",
+                                                         savefolder=savefolder,
+                                                         filedir=hexList,
+                                                         metric=metric,
+                                                         night=nightonly)})
 
-
-# Create and save plots 
-lapply(1:length(taxaList), function(x){tryCatch(plotResults(studyarea=studyarea, 
-                                                            studyareaname = studyareaname,
+################################# RESULTS PLOTS #################################
+# Plots for All Alaska  
+lapply(1:length(AleutList), function(x){tryCatch(plotResults(studyarea=uni,
+                                                            studyareaname = "Eastern Aleutians",
                                                             basemap=basemap,
-                                                            figfolder=figfolder,
+                                                            figfolder="../Figures/Aleutians/",
                                                             monthsname=monthsname,
-                                                            taxaLabel=names(taxaList[x]),
+                                                            taxaLabel=names(AleutList[x]),
                                                             night=nightonly,
                                                             metricName=metricName),error=function(e) NULL)})
 
 
+lapply(1:length(GOAList), function(x){tryCatch(plotResults(studyarea=goa, 
+                                                             studyareaname = "Gulf of Alaska",
+                                                             basemap=basemap,
+                                                             figfolder="../Figures/GOA/",
+                                                             monthsname=monthsname,
+                                                             taxaLabel=names(GOAList[x]),
+                                                             night=nightonly,
+                                                             metricName=metricName),error=function(e) NULL)})
+
+lapply(1:length(BerChukList), function(x){tryCatch(plotResults(studyarea=berchuk, 
+                                                           studyareaname = "Northern Bering & Chukchi Seas",
+                                                           basemap=basemap,
+                                                           figfolder="../Figures/NorthBeringAndChukchi/",
+                                                           monthsname=monthsname,
+                                                           taxaLabel=names(BerChukList[x]),
+                                                           night=nightonly,
+                                                           metricName=metricName),error=function(e) NULL)})
+
+lapply(1:length(AllAKList), function(x){tryCatch(plotResults(studyarea=npac, 
+                                                             studyareaname = "All Alaska",
+                                                             basemap=basemap,
+                                                             figfolder="../Figures/AllAlaska/",
+                                                             monthsname=monthsname,
+                                                             taxaLabel=names(AllAKList[x]),
+                                                             night=nightonly,
+                                                             metricName=metricName),error=function(e) NULL)})
 
 browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ")
 
