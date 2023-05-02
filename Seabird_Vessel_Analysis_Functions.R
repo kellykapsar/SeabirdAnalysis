@@ -197,7 +197,7 @@ birdHexesByEffort <- function(dataobs,
     # Calculate effort-weighted densities of seabirds (# birds per square km of surveyed area)
     birdFinal$DensBird <- c(birdFinal$AllBird/birdFinal$survEff)
     
-    # Calculate effort-weighted classes for the number of observations 
+    # Calculate effort-weighted classes for the number of observations
     birdFinal$ClassBird <- ifelse(c(birdFinal$AllBird/birdFinal$survEff)<mean(c(birdFinal$AllBird/birdFinal$survEff)),1,
                              ifelse(c(birdFinal$AllBird/birdFinal$survEff)>=c(mean(c(birdFinal$AllBird/birdFinal$survEff))+sd(c(birdFinal$AllBird/birdFinal$survEff))),3,2))
     
@@ -225,7 +225,8 @@ birdHexesByEffort <- function(dataobs,
                 ifelse(df$ClassBird == 3 & df$ClassShip == 2 | df$ClassBird == 2 & df$ClassShip == 3, "high",
                 ifelse(df$ClassBird == 2 & df$ClassShip == 2, "high",
                 ifelse(df$ClassBird == 3 & df$ClassShip == 3, "veryhigh", NA))))))
-    
+
+
     df$risk <- factor(df$risk,  c("low","medium","high","veryhigh"))
     
     # Save data 
@@ -259,10 +260,6 @@ plotResults <- function(basemap,
   finalBird <- df %>% dplyr::filter(DensBird > 0)
   
   if(length(finalBird$hexID) == 0){stop(paste0("No ", taxaLabel, " were found in this study area."))}
-  
-  finalBird <- bi_class(finalBird, x = DensBird, y = AllShip, style = "quantile", dim = 3)
-  bs <- bi_class_breaks(finalBird, x = DensBird, y = AllShip, style = "quantile", dim = 3, split=TRUE)
-  bs <- lapply(bs, function(x){round(x,2)})  
     
   #### Traffic plot ####
   traffplotname <- paste0(figfolder,"TrafficPlots/TrafficDensity_", studyareaname,"_",monthsname,"_NightOnly",night,".png")
@@ -270,7 +267,8 @@ plotResults <- function(basemap,
   p0 <- ggplot() +
     geom_sf(data=basemapnew, fill="#8ba761", lwd=0) +
     geom_sf(data=df,aes(fill = AllShip), color="lightgray") +
-    scale_fill_continuous(trans="log",low = "yellow", high = "red", labels=scales::comma, name="Total \nOperating Days") + 
+    scale_fill_steps(trans="log",low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::comma, 
+                     name="Total \nOperating Days", guide = guide_coloursteps(show.limits = TRUE)) +
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
     labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
@@ -307,7 +305,8 @@ plotResults <- function(basemap,
     scale_fill_manual(values = c("low" = "#73b2ff",
                                  "medium" = "#55fe01",
                                  "high" = "#ffff01",
-                                 "veryhigh" = "#e31a1c"), 
+                                 "veryhigh" = "#e31a1c", 
+                                 na.value = "#bcc7dd"), 
                       name="Risk", 
                       labels = c("Low", "Medium", "High", "Very High")) +
     xlab("") +
@@ -340,10 +339,35 @@ plotResults <- function(basemap,
   bivarplotname <- paste0(figfolder,"BivariatePlots/BiVariateMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
   bivarlegendname <- paste0(figfolder,"BivariatePlots/BiVariateMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,"_Legend.png")
   
+  # Possibly create custom color palette
+  # 
+  # custom_pal3 <- c(
+  #   "1-1" = "#d3d3d3", # low x, low y
+  #   "2-1" = "#A1D08A",
+  #   "3-1" = "#66CC33", # high x, low y
+  #   "1-2" = "#E7E773",
+  #   "2-2" = "#FF9966", # medium x, medium y
+  #   "3-2" = "#ACB54A",
+  #   "1-3" = "#FFFF00", # low x, high y
+  #   "2-3" = "#FFC738",
+  #   "3-3" = "#FF1C13" # high x, high y
+  # )
+    # And custom breaks using https://stackoverflow.com/questions/46750635/cut-and-quantile-in-r-in-not-including-zero
+  # But also we've already developed our own breaks for the risk, so this just makes it confusing... 
+
+  df <- bi_class(df, x = DensBird , y = AllShip, style = "jenks", dim = 3)
+  bs <- bi_class_breaks(df, x = DensBird, y = AllShip, style = "jenks", dim = 3, split=TRUE)
+  
+  # round(mean(c(min(df$DensBird[df$ClassBird == 2]), max(df$DensBird[df$ClassBird == 1]))),1)
+  # round(mean(c(min(df$DensBird[df$ClassBird == 3]), max(df$DensBird[df$ClassBird == 2]))),1)
+  # 
+  # plyr::round_any(mean(c(min(df$AllShip[df$ClassShip == 2]), max(df$AllShip[df$ClassShip == 1]))),100, f=ceiling)
+  # plyr::round_any(mean(c(min(df$AllShip[df$ClassShip == 3]), max(df$AllShip[df$ClassShip == 2]))),100, f=ceiling)
+
   p2 <- ggplot() +
     geom_sf(data=basemapnew, fill="#8ba761", lwd=0) +
-    geom_sf(data=finalNoBird, fill="#73b2ff", color="lightgray") + 
-    geom_sf(data=finalBird,aes(fill = bi_class), color="lightgray", show.legend = FALSE) +
+    # geom_sf(data=finalNoBird, fill="#73b2ff", color="lightgray") + 
+    geom_sf(data=df,aes(fill = bi_class), color="#73b2ff", show.legend = FALSE) +
     bi_scale_fill(pal = "PurpleOr", dim = 3) +
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
@@ -364,7 +388,7 @@ plotResults <- function(basemap,
                             subtitle = paste0("(",monthsname," 2015-2022)")), 
          p2alone <- p2 + ggtitle(label = paste0(taxaLabel, " and Vessel Traffic\n", studyareaname), 
                             subtitle = paste0("(",monthsname," 2015-2022)")))
-  
+
   legend <- bi_legend(pal = "PurpleOr",
                       dim = 3,
                       xlab = "Bird Density",
@@ -396,11 +420,16 @@ plotResults <- function(basemap,
   #### Bird density plot ####
   birdplotname <- paste0(figfolder,"BirdDensityPlots/DensityMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
   
+  cols <- c(colorRampPalette(c("#e7f0fa", "#c9e2f6", "#95cbee", "#0099dc", "#4ab04a", "#ffd73e"))(25),
+                                colorRampPalette(c("#eec73a", "#e29421", "#e29421", "#f05336","#ce472e"), bias=2)(25))
+  
   p3 <- ggplot() +
-    geom_sf(data=basemapnew, fill="#8ba761", lwd=0) +
-    geom_sf(data=finalNoBird, fill="#73b2ff", color="lightgray") + 
+    geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
+    # geom_sf(data=finalNoBird, fill="#73b2ff", color="lightgray") + 
     geom_sf(data=finalBird,aes(fill = DensBird), color="lightgray") +
-    scale_fill_continuous(trans="log",low = "yellow", high = "red", labels=scales::number_format(), name="Density \n(Ind'ls/km\u00b2)") + 
+    scale_fill_gradientn(colours=cols, trans="log10", labels=scales::label_number(),name="Density \n(Ind'ls/km\u00b2)") +
+    # scale_fill_steps(trans="log",low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::label_number(), 
+    #                  name="Density \n(Ind'ls/km\u00b2)", guide = guide_coloursteps(show.limits = TRUE)) + 
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
     labs(caption = paste0("*Empty hexes were surveyed, but no ", taxaLabel, " were sighted during study period.")) + 
@@ -410,7 +439,7 @@ plotResults <- function(basemap,
           plot.subtitle = element_text(hjust = 0.5), 
           plot.caption = element_text(size = 8, hjust=0),
           axis.text=element_blank(),
-          panel.background = element_rect(fill = "#73b2ff"),
+          # panel.background = element_rect(fill = "#73b2ff"),
           panel.border =  element_rect(colour = "black"),
           panel.grid.major = element_line(colour = "transparent")) 
   
