@@ -135,12 +135,14 @@ length(which(topnight$hexID %in% topday$hexID))
 topdaysf <- topday  %>% left_join(hexMask) %>% st_as_sf()
 topnightsf <- topnight  %>% left_join(hexMask) %>% st_as_sf()
 
+hexdatsf <- hexdatall  %>% left_join(hexMask) %>% st_as_sf()
+
 
 # Cells with the greatest difference in daytime and nighttime traffic 
 ggplot() +
   geom_sf(data=studyarea, fill="#8ba761", lwd=0) +
-  geom_sf(data=topnightsf,aes(fill = OpD_Al), color="lightgray") +
-  scale_fill_continuous(trans="log",low = "yellow", high = "red", labels=scales::comma, name="Total \nOperating Days") + 
+  geom_sf(data=hexdatsf,aes(fill = propnight), color="lightgray") +
+  # scale_fill_continuous(trans="log",low = "yellow", high = "red", labels=scales::comma, name="Total \nOperating Days") + 
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
   labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
@@ -189,7 +191,7 @@ ggplot(hexdatnew, aes(x = propnight, y = daynight)) +
 
 # Proportion night vs. proportion nighttime vessel traffic colored by month
 ggplot(hexdatnew, aes(x = D_OpD_Al, y = N_OpD_Al)) +
-  geom_point() +
+  geom_point(aes(color=lat)) +
   stat_smooth(method="lm", se=TRUE) + 
   geom_abline(color="black", lwd=1)
 
@@ -199,7 +201,7 @@ ggplot(hexdatnew, aes(x = D_OpD_Al, y = N_OpD_Al)) +
   geom_abline(color="black", lwd=1)
 
 ggplot(hexdatnew %>% filter(OpD_Al < 2000), aes(x = D_OpD_Al, y = N_OpD_Al)) +
-  geom_point(aes(color=propnight)) +
+  geom_point(aes(color=lat)) +
   stat_smooth(method="lm", se=TRUE) + 
   geom_abline(color="black", lwd=1)
 
@@ -210,7 +212,7 @@ ggplot(hexdatnew %>% filter(OpD_Al < 500), aes(x = D_OpD_Al, y = N_OpD_Al)) +
 
 # Proportion night vs. latitude colored by month
 ggplot(hexdatnew, aes(x = propnight, y = lat)) +
-  geom_point(aes(color = month)) 
+  geom_point() 
 
 # Proportion night vs. proportion nighttime vessel traffic colored by hexID
 ggplot(hexdatnew, aes(x = propnight, y = propnighttraff)) +
@@ -224,7 +226,7 @@ cor.test(~N_OpD_Al + D_OpD_Al, data=hexdatnew, method="spearman")
 cor(hexdatnew)
 
 hist(residuals(m1),  nbin=30)
-ggplot(m1, aes(x = resdiuals, color=month)) + geom_histogram()
+ggplot(m1, aes(x = residuals, color=month)) + geom_histogram()
 
 qqnorm(residuals(m1))
 qqline(residuals(m1))
