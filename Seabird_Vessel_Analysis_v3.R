@@ -28,7 +28,7 @@ library(gridExtra)
 ################################
 
 # Read in vessel traffic data 
-hexdir <- "D:/AIS_V2_DayNight_60km6hrgap/Hex/"
+hexdir <- "D:/AIS_V2_DayNight_60km6hrgap/Hex_DayNight_Hours/"
 hexList <-list.files(hexdir, pattern=".shp")
 
 # Read in blank hexagon template 
@@ -59,12 +59,12 @@ npac <- st_as_sf(data.frame(name="All Alaska", geometry= st_as_sfc(st_bbox(hexMa
 ###################################
 
 # Specify metric used to calculate vessel activity 
-metric <- "OperatingDays" # MUST be "OperatingDays" or "Ships"
-metricName <-"Operating Days"
+metric <- "Hours" # MUST be "OperatingDays", "Ships", or "Hours"
+metricName <-"Hours"
 ## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
 ## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
 
-nightonly <- FALSE #If true, will only calculate nighttime vessel traffic (ignoring daytime)
+nightonly <- TRUE #If true, will only calculate nighttime vessel traffic (ignoring daytime)
 # If false, will calculate all vessel traffic, including both day and night
 
 # months <- c(9:11) # Numeric value(s) of months to be included in the analysis
@@ -238,6 +238,7 @@ lapply(1:length(AleutList), function(x){tryCatch(plotResults(studyarea=uni,
                                                             studyareaname = "Eastern Aleutians",
                                                             basemap=basemap,
                                                             figfolder="../Figures/Aleutians/",
+                                                            savefolder=savefolder,
                                                             monthsname=monthsname,
                                                             taxaLabel=names(AleutList[x]),
                                                             night=nightonly,
@@ -248,6 +249,7 @@ lapply(1:length(GOAList), function(x){tryCatch(plotResults(studyarea=goa,
                                                              studyareaname = "Gulf of Alaska",
                                                              basemap=basemap,
                                                              figfolder="../Figures/GOA/",
+                                                             savefolder=savefolder,
                                                              monthsname=monthsname,
                                                              taxaLabel=names(GOAList[x]),
                                                              night=nightonly,
@@ -257,6 +259,7 @@ lapply(1:length(BerChukList), function(x){tryCatch(plotResults(studyarea=berchuk
                                                            studyareaname = "Northern Bering & Chukchi Seas",
                                                            basemap=basemap,
                                                            figfolder="../Figures/NorthBeringAndChukchi/",
+                                                           savefolder=savefolder,
                                                            monthsname=monthsname,
                                                            taxaLabel=names(BerChukList[x]),
                                                            night=nightonly,
@@ -266,6 +269,7 @@ lapply(1:length(AllAKList), function(x){tryCatch(plotResults(studyarea=npac,
                                                              studyareaname = "All Alaska",
                                                              basemap=basemap,
                                                              figfolder="../Figures/AllAlaska/",
+                                                             savefolder=savefolder,
                                                              monthsname=monthsname,
                                                              taxaLabel=names(AllAKList[x]),
                                                              night=nightonly,

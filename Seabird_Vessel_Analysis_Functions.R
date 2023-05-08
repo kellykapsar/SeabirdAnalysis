@@ -106,7 +106,9 @@ traffDensity <- function(filedir, mnths, metric, night, trafffilename){
   
   # Select metrics based on inputs 
   lab <- ifelse(metric=="OperatingDays", "OpD", 
-                ifelse(metric=="Ships","Shp", NA))
+         ifelse(metric=="Ships","Shp", 
+         ifelse(metric=="Hours", "Hrs", NA)))
+  
   lab <- ifelse(night==TRUE, paste0("N_",lab, "_Al"),paste0(lab, "_Al"))
   
   test <- hexAll %>% dplyr::select(as.character(lab))
@@ -152,7 +154,7 @@ birdHexesByEffort <- function(dataobs,
                               night){
   
   # Make sure appropriate vessel data exist and if not, generate it
-  trafffilename <- paste0(savefolder,"TraffInHexes_",mnthsnam,"_NightOnly", night,".csv")
+  trafffilename <- paste0(savefolder,"TraffInHexes_",metric,"_",mnthsnam,"_NightOnly", night,".csv")
   
   if(!file.exists(trafffilename)){
     traffDensity(filedir = hexList, mnths = mnths, metric = metric, night = night, trafffilename)
@@ -239,6 +241,7 @@ plotResults <- function(basemap,
                         studyarea,
                         studyareaname, 
                         figfolder,
+                        savefolder,
                         monthsname,
                         taxaLabel,
                         night,
@@ -259,26 +262,31 @@ plotResults <- function(basemap,
   finalNoBird <- df %>% dplyr::filter(DensBird == 0)
   finalBird <- df %>% dplyr::filter(DensBird > 0)
   
+  # Get color scale that works well for skewed data 
+  cols <- c(colorRampPalette(c("#e7f0fa", "#c9e2f6", "#95cbee", "#0099dc", "#4ab04a", "#ffd73e"))(25),
+            colorRampPalette(c("#eec73a", "#e29421", "#e29421", "#f05336","#ce472e"), bias=2)(25))
+  
+  
   if(length(finalBird$hexID) == 0){stop(paste0("No ", taxaLabel, " were found in this study area."))}
     
   #### Traffic plot ####
   traffplotname <- paste0(figfolder,"TrafficPlots/TrafficDensity_", studyareaname,"_",monthsname,"_NightOnly",night,".png")
   
   p0 <- ggplot() +
-    geom_sf(data=basemapnew, fill="#8ba761", lwd=0) +
+    geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
     geom_sf(data=df,aes(fill = AllShip), color="lightgray") +
-    scale_fill_steps(trans="log",low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::comma, 
-                     name="Total \nOperating Days", guide = guide_coloursteps(show.limits = TRUE)) +
+    # scale_fill_steps(trans="log",low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::comma,
+    #                  name="Total Hours\nof Vessel Traffic", guide = guide_coloursteps(show.limits = TRUE)) +
+    scale_fill_gradientn(colours=cols, trans="log10", labels=scales::label_number(),name="Vessel Activity\n(Hours)") +
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
-    labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
+    # labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
     theme_bw() +
     theme(text = element_text(size = 18),
           plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5), 
           plot.caption = element_text(size = 8, hjust=0),
           axis.text=element_blank(),
-          panel.background = element_rect(fill = "#73b2ff"),
           panel.border =  element_rect(colour = "black"),
           panel.grid.major = element_line(colour = "transparent")) 
     
@@ -419,9 +427,6 @@ plotResults <- function(basemap,
   
   #### Bird density plot ####
   birdplotname <- paste0(figfolder,"BirdDensityPlots/DensityMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
-  
-  cols <- c(colorRampPalette(c("#e7f0fa", "#c9e2f6", "#95cbee", "#0099dc", "#4ab04a", "#ffd73e"))(25),
-                                colorRampPalette(c("#eec73a", "#e29421", "#e29421", "#f05336","#ce472e"), bias=2)(25))
   
   p3 <- ggplot() +
     geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
