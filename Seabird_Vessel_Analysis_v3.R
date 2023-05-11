@@ -64,7 +64,7 @@ metricName <-"Hours"
 ## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
 ## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
 
-nightonly <- TRUE #If true, will only calculate nighttime vessel traffic (ignoring daytime)
+timeofday <- "Night" #If true, will only calculate nighttime vessel traffic (ignoring daytime)
 # If false, will calculate all vessel traffic, including both day and night
 
 # months <- c(9:11) # Numeric value(s) of months to be included in the analysis
@@ -108,7 +108,7 @@ corm <- c("PECO","DCCO","RFCO","UNCO")
 loon <- c("YBLO","PALO","ARLO","RTLO","COLO","UNLO")
 alba <- c("UALB","BFAL","LAAL","STAL")
 duckswangoose <- c("LTDU","HADU","UNGO","BAGO","COGO","UNDU","CAGO","GWFG","SNGO",
-           "ROGO","BRAN","BLBR","CANG","UNGO","TRUS","TUNS")
+"ROGO","BRAN","BLBR","CANG","UNGO","TRUS","TUNS")
 stormpet <- c("FTSP","LESP","UNSP")
 nofu <- c("NOFU")
 kiei <- c("KIEI")
@@ -117,20 +117,23 @@ larid <- c(kitti, gull)
 alcid <- c(murre, auklet, guill, puffin)
 
 
-AllAKList <- list(totalBirds, seaducks, shear, 
+AllAKList <- list(totalBirds, seaducks, shear,
                   murre, auklet, phal, eider,
-                  murrelet, kitti, gull, puffin, 
-                  guill, scoter, corm, loon, 
-                  alba, duckswangoose, stormpet, nofu, 
+                  murrelet, kitti, gull, puffin,
+                  guill, scoter, corm, loon,
+                  alba, duckswangoose, stormpet, nofu,
                   kiei, larid, alcid)
 
-  
-names(AllAKList) <- c("Seabirds","Seaducks", "Shearwaters", 
+
+names(AllAKList) <- c("Seabirds","Seaducks", "Shearwaters",
                       "Murres", "Auklets", "Phalaropes", "Eiders",
                       "Murrelets", "Kittiwakes", "Gulls", "Puffins",
-                      "Guillemots", "Scoters","Cormorants","Loons", 
+                      "Guillemots", "Scoters","Cormorants","Loons",
                       "Albatross", "DuckSwanGoose","Storm Petrels", "Northern Fulmars",
                       "King Eiders", "Larids", "Alcids")
+
+# AlaskaList <- list(totalBirds)
+# names(AlaskaList <- "Seabirds")
 
 AleutList <- list(alba)
 names(AleutList) <- c("Albatross")
@@ -164,7 +167,7 @@ source("./Seabird_Vessel_Analysis_Functions.R")
 #                  savefolder=savefolder,
 #                  filedir=hexList, 
 #                  metric=metric, 
-#                  night=nightonly)
+#                  timeofday=timeofday)
 
 # For a list of species
 ## ALEUTIANS
@@ -182,7 +185,7 @@ lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[
                                                          savefolder=savefolder,
                                                          filedir=hexList,
                                                          metric=metric,
-                                                         night=nightonly)})
+                                                         timeofday=timeofday)})
 ## GULF OF ALASKA
 lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
                                                          taxaLabel= names(AllAKList[x]),
@@ -198,7 +201,7 @@ lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[
                                                          savefolder=savefolder,
                                                          filedir=hexList,
                                                          metric=metric,
-                                                         night=nightonly)})
+                                                         timeofday=timeofday)})
 # NORTHERN BERING & CHUKCHI
 lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
                                                          taxaLabel= names(AllAKList[x]),
@@ -214,7 +217,7 @@ lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[
                                                          savefolder=savefolder,
                                                          filedir=hexList,
                                                          metric=metric,
-                                                         night=nightonly)})
+                                                         timeofday=timeofday)})
 ## ALL ALASKA 
 lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
                                                          taxaLabel= names(AllAKList[x]),
@@ -230,7 +233,7 @@ lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[
                                                          savefolder=savefolder,
                                                          filedir=hexList,
                                                          metric=metric,
-                                                         night=nightonly)})
+                                                         timeofday=timeofday)})
 
 ################################# RESULTS PLOTS #################################
 # Plots for All Alaska  
@@ -241,7 +244,7 @@ lapply(1:length(AleutList), function(x){tryCatch(plotResults(studyarea=uni,
                                                             savefolder=savefolder,
                                                             monthsname=monthsname,
                                                             taxaLabel=names(AleutList[x]),
-                                                            night=nightonly,
+                                                            timeofday=timeofday,
                                                             metricName=metricName),error=function(e) NULL)})
 
 
@@ -252,7 +255,7 @@ lapply(1:length(GOAList), function(x){tryCatch(plotResults(studyarea=goa,
                                                              savefolder=savefolder,
                                                              monthsname=monthsname,
                                                              taxaLabel=names(GOAList[x]),
-                                                             night=nightonly,
+                                                             timeofday=timeofday,
                                                              metricName=metricName),error=function(e) NULL)})
 
 lapply(1:length(BerChukList), function(x){tryCatch(plotResults(studyarea=berchuk, 
@@ -262,7 +265,7 @@ lapply(1:length(BerChukList), function(x){tryCatch(plotResults(studyarea=berchuk
                                                            savefolder=savefolder,
                                                            monthsname=monthsname,
                                                            taxaLabel=names(BerChukList[x]),
-                                                           night=nightonly,
+                                                           timeofday=timeofday,
                                                            metricName=metricName),error=function(e) NULL)})
 
 lapply(1:length(AllAKList), function(x){tryCatch(plotResults(studyarea=npac, 
@@ -272,10 +275,10 @@ lapply(1:length(AllAKList), function(x){tryCatch(plotResults(studyarea=npac,
                                                              savefolder=savefolder,
                                                              monthsname=monthsname,
                                                              taxaLabel=names(AllAKList[x]),
-                                                             night=nightonly,
+                                                             timeofday=timeofday,
                                                              metricName=metricName),error=function(e) NULL)})
 
-browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ")
+# browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ")
 
 # bird <- st_read("../Data_Processed/ObsInHexes_Fall.shp")
 # ship <- read.csv("../Data_Processed/TraffInHexes_Fall_NightOnlyTRUE.csv")

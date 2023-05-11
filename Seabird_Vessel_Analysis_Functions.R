@@ -95,7 +95,7 @@ birdDensity <- function(loc, datobs, hex, startyr, mnths, survfilename){
 
 #### Vessel Activity #### 
 
-traffDensity <- function(filedir, mnths, metric, night, trafffilename){
+traffDensity <- function(filedir, mnths, metric, timeofday, trafffilename){
   
   # Isolate month values of interest from file names 
   hexes <- filedir[as.numeric(substr(filedir,10,11)) %in% mnths]
@@ -109,7 +109,15 @@ traffDensity <- function(filedir, mnths, metric, night, trafffilename){
          ifelse(metric=="Ships","Shp", 
          ifelse(metric=="Hours", "Hrs", NA)))
   
-  lab <- ifelse(night==TRUE, paste0("N_",lab, "_Al"),paste0(lab, "_Al"))
+  if(timeofday=="Night"){
+    lab <- paste0("N_",lab, "_Al")
+  }
+  if(timeofday=="Day"){
+    lab <- paste0("D_",lab, "_Al")
+  }
+  if(timeofday=="All"){
+    lab <- paste0(lab, "_Al")
+  }
   
   test <- hexAll %>% dplyr::select(as.character(lab))
   test$hexID <- hexAll$hexID
@@ -151,13 +159,13 @@ birdHexesByEffort <- function(dataobs,
                               figfolder,
                               filedir,
                               metric, 
-                              night){
+                              timeofday){
   
   # Make sure appropriate vessel data exist and if not, generate it
-  trafffilename <- paste0(savefolder,"TraffInHexes_",metric,"_",mnthsnam,"_NightOnly", night,".csv")
+  trafffilename <- paste0(savefolder,"TraffInHexes_",metric,"_",mnthsnam,"_", timeofday,".csv")
   
   if(!file.exists(trafffilename)){
-    traffDensity(filedir = hexList, mnths = mnths, metric = metric, night = night, trafffilename)
+    traffDensity(filedir = hexList, mnths = mnths, metric = metric, timeofday = timeofday, trafffilename)
   }
   
   traffdf <- read.csv(trafffilename)
@@ -171,7 +179,7 @@ birdHexesByEffort <- function(dataobs,
   birddf <- st_read(survfilename)
   
   # Make sure this function has not already been run with these exact parameter specifications 
-  finaldfname <- paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp")
+  finaldfname <- paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_", timeofday,".shp")
   
   if(!file.exists(finaldfname)){
     
@@ -200,8 +208,9 @@ birdHexesByEffort <- function(dataobs,
     birdFinal$DensBird <- c(birdFinal$AllBird/birdFinal$survEff)
     
     # Calculate effort-weighted classes for the number of observations
-    birdFinal$ClassBird <- ifelse(c(birdFinal$AllBird/birdFinal$survEff)<mean(c(birdFinal$AllBird/birdFinal$survEff)),1,
-                             ifelse(c(birdFinal$AllBird/birdFinal$survEff)>=c(mean(c(birdFinal$AllBird/birdFinal$survEff))+sd(c(birdFinal$AllBird/birdFinal$survEff))),3,2))
+    birdFinal$ClassBird <- ifelse(birdFinal$AllBird == 0, 0, 
+                            ifelse(c(birdFinal$AllBird/birdFinal$survEff)<mean(c(birdFinal$AllBird/birdFinal$survEff)),1,
+                             ifelse(c(birdFinal$AllBird/birdFinal$survEff)>=c(mean(c(birdFinal$AllBird/birdFinal$survEff))+sd(c(birdFinal$AllBird/birdFinal$survEff))),3,2)))
     
     # Create column to specify taxa of interest
     birdFinal$taxa <- taxaLabel
@@ -232,7 +241,7 @@ birdHexesByEffort <- function(dataobs,
     df$risk <- factor(df$risk,  c("low","medium","high","veryhigh"))
     
     # Save data 
-    st_write(df, paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp"))
+    st_write(df, paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_", timeofday,".shp"))
   }
 }
 
@@ -244,11 +253,11 @@ plotResults <- function(basemap,
                         savefolder,
                         monthsname,
                         taxaLabel,
-                        night,
+                        timeofday,
                         metricName){
 
   # Load in data file
-  dfname <- paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night[1],".shp")
+  dfname <- paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_", timeofday,".shp")
   
   if(!file.exists(dfname)){
     stop("Combined dataframe does not exist. Try running birdHexesByEffort function first.")
@@ -270,14 +279,14 @@ plotResults <- function(basemap,
   if(length(finalBird$hexID) == 0){stop(paste0("No ", taxaLabel, " were found in this study area."))}
     
   #### Traffic plot ####
-  traffplotname <- paste0(figfolder,"TrafficPlots/TrafficDensity_", studyareaname,"_",monthsname,"_NightOnly",night,".png")
+  traffplotname <- paste0(figfolder,"TrafficPlots/TrafficDensity_", studyareaname,"_",monthsname,"_",timeofday,".png")
   
   p0 <- ggplot() +
     geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
-    geom_sf(data=df,aes(fill = AllShip), color="lightgray") +
+    geom_sf(data=df,aes(fill = AllShip), color="darkgray") +
     # scale_fill_steps(trans="log",low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::comma,
     #                  name="Total Hours\nof Vessel Traffic", guide = guide_coloursteps(show.limits = TRUE)) +
-    scale_fill_gradientn(colours=cols, trans="log10", labels=scales::label_number(),name="Vessel Activity\n(Hours)") +
+    scale_fill_gradientn(colours=cols, trans="log10", labels=scales::label_number(),name="Vessel Activity\n(Hours)", na.value="white") +
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
     # labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
@@ -290,31 +299,37 @@ plotResults <- function(basemap,
           panel.border =  element_rect(colour = "black"),
           panel.grid.major = element_line(colour = "transparent")) 
     
-    ifelse(night == TRUE, 
+    if(timeofday == "Night"){ 
       p0alone <- p0 + ggtitle(label = paste0("Nighttime Vessel Traffic Intensity\n", studyareaname), 
-                   subtitle = paste0("(",monthsname," 2015-2022)")), 
+                   subtitle = paste0("(",monthsname," 2015-2022)")) 
+    }
+    if(timeofday == "Day"){
+      p0alone <- p0 + ggtitle(label = paste0("Daytime Vessel Traffic Intensity\n", studyareaname), 
+                              subtitle = paste0("(",monthsname," 2015-2022)")) 
+    }
+    if(timeofday == "All"){
       p0alone <- p0 + ggtitle(label = paste0("Vessel Traffic Intensity\n", studyareaname), 
-                         subtitle = paste0("(",monthsname," 2015-2022)")) 
-    )
-    
-    # Save figure 
+                              subtitle = paste0("(",monthsname," 2015-2022)")) 
+    }
+  
+      # Save figure 
     if(!file.exists(traffplotname)){
       ggsave(filename = traffplotname, plot = p0alone, width=10, height=8, units="in")
     }
 
   #### Risk plot ####
-  riskplotname <- paste0(figfolder,"RiskPlots/RiskMap_", studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
+  riskplotname <- paste0(figfolder,"RiskPlots/RiskMap_", studyareaname,"_",taxaLabel,"_",monthsname,"_", timeofday,".png")
   
   df$risk <- factor(df$risk, levels=c("low", "medium", "high", "veryhigh"))
   
   p1 <- ggplot() +
-    geom_sf(data=basemapnew, fill="#fefeff", lwd=0) +
-    geom_sf(data=df,aes(fill = risk)) +
+    geom_sf(data=basemapnew, fill="lightgray",lwd=0) +
+    geom_sf(data=df,aes(fill = risk), color="darkgray") +
     scale_fill_manual(values = c("low" = "#73b2ff",
                                  "medium" = "#55fe01",
                                  "high" = "#ffff01",
-                                 "veryhigh" = "#e31a1c", 
-                                 na.value = "#bcc7dd"), 
+                                 "veryhigh" = "#e31a1c"), 
+                      na.value = "white", 
                       name="Risk", 
                       labels = c("Low", "Medium", "High", "Very High")) +
     xlab("") +
@@ -327,15 +342,21 @@ plotResults <- function(basemap,
           plot.subtitle = element_text(hjust = 0.5), 
           plot.caption = element_text(size = 8, hjust=0),
           axis.text=element_blank(),
-          panel.background = element_rect(fill = "#bcc7dd"),
           panel.border =  element_rect(colour = "black"),
           panel.grid.major = element_line(colour = "transparent"))
   
-  ifelse(night == TRUE, 
+  if(timeofday == "Night"){
          p1alone <- p1 + ggtitle(label = paste0(taxaLabel, " and Nighttime Vessel Traffic\n", studyareaname), 
-                            subtitle = paste0("(",monthsname," 2015-2022)")), 
-         p1alone <- p1 + ggtitle(label = paste0(taxaLabel, " and Vessel Traffic\n", studyareaname), 
-                            subtitle = paste0("(",monthsname," 2015-2022)")))
+                            subtitle = paste0("(",monthsname," 2015-2022)"))
+  }
+  if(timeofday == "Day"){
+         p1alone <- p1 + ggtitle(label = paste0(taxaLabel, " and Daytime Vessel Traffic\n", studyareaname), 
+                            subtitle = paste0("(",monthsname," 2015-2022)"))
+  }
+  if(timeofday == "All"){
+    p1alone <- p1 + ggtitle(label = paste0(taxaLabel, " and Vessel Traffic\n", studyareaname), 
+                            subtitle = paste0("(",monthsname," 2015-2022)"))
+  }
   
   # Save figure 
   if(!file.exists(riskplotname)){
@@ -343,96 +364,14 @@ plotResults <- function(basemap,
            plot = p1alone, width=12, height=8, units="in")
   }
   
-  #### Bivariate plot ####
-  bivarplotname <- paste0(figfolder,"BivariatePlots/BiVariateMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
-  bivarlegendname <- paste0(figfolder,"BivariatePlots/BiVariateMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,"_Legend.png")
-  
-  # Possibly create custom color palette
-  # 
-  # custom_pal3 <- c(
-  #   "1-1" = "#d3d3d3", # low x, low y
-  #   "2-1" = "#A1D08A",
-  #   "3-1" = "#66CC33", # high x, low y
-  #   "1-2" = "#E7E773",
-  #   "2-2" = "#FF9966", # medium x, medium y
-  #   "3-2" = "#ACB54A",
-  #   "1-3" = "#FFFF00", # low x, high y
-  #   "2-3" = "#FFC738",
-  #   "3-3" = "#FF1C13" # high x, high y
-  # )
-    # And custom breaks using https://stackoverflow.com/questions/46750635/cut-and-quantile-in-r-in-not-including-zero
-  # But also we've already developed our own breaks for the risk, so this just makes it confusing... 
-
-  df <- bi_class(df, x = DensBird , y = AllShip, style = "jenks", dim = 3)
-  bs <- bi_class_breaks(df, x = DensBird, y = AllShip, style = "jenks", dim = 3, split=TRUE)
-  
-  # round(mean(c(min(df$DensBird[df$ClassBird == 2]), max(df$DensBird[df$ClassBird == 1]))),1)
-  # round(mean(c(min(df$DensBird[df$ClassBird == 3]), max(df$DensBird[df$ClassBird == 2]))),1)
-  # 
-  # plyr::round_any(mean(c(min(df$AllShip[df$ClassShip == 2]), max(df$AllShip[df$ClassShip == 1]))),100, f=ceiling)
-  # plyr::round_any(mean(c(min(df$AllShip[df$ClassShip == 3]), max(df$AllShip[df$ClassShip == 2]))),100, f=ceiling)
-
-  p2 <- ggplot() +
-    geom_sf(data=basemapnew, fill="#8ba761", lwd=0) +
-    # geom_sf(data=finalNoBird, fill="#73b2ff", color="lightgray") + 
-    geom_sf(data=df,aes(fill = bi_class), color="#73b2ff", show.legend = FALSE) +
-    bi_scale_fill(pal = "PurpleOr", dim = 3) +
-    scale_x_continuous(expand = c(0, 0)) +
-    scale_y_continuous(expand = c(0, 0)) +
-    labs(caption = paste0("*Empty hexes were surveyed, but no ", taxaLabel, " were sighted during study period.")) + 
-    bi_theme() +
-    theme_bw() +
-    theme(text = element_text(size = 18),
-          plot.title = element_text(hjust = 0.5),
-          plot.subtitle = element_text(hjust = 0.5), 
-          plot.caption = element_text(size = 8, hjust=0),
-          axis.text=element_blank(),
-          panel.background = element_rect(fill = "#73b2ff"),
-          panel.border =  element_rect(colour = "black"),
-          panel.grid.major = element_line(colour = "transparent")) 
-  
-  ifelse(night == TRUE, 
-         p2alone <- p2 + ggtitle(label = paste0(taxaLabel, " and Nighttime Vessel Traffic\n", studyareaname), 
-                            subtitle = paste0("(",monthsname," 2015-2022)")), 
-         p2alone <- p2 + ggtitle(label = paste0(taxaLabel, " and Vessel Traffic\n", studyareaname), 
-                            subtitle = paste0("(",monthsname," 2015-2022)")))
-
-  legend <- bi_legend(pal = "PurpleOr",
-                      dim = 3,
-                      xlab = "Bird Density",
-                      ylab = "Vessel Traffic",
-                      size = 10, 
-                      breaks = bs, 
-                      arrows=TRUE)
-  leggrob <- ggplotGrob(legend)
-  
-  # Can't figure out how to draw legend onto plot for different study areas so going to disable this and 
-  # save legend separately for now. 
-  
-  # p2Final <- ggdraw() +
-  #   draw_plot(p2, 0, 0, 1, 1) 
-  # 
-  # p2Final <- p2Final + draw_plot(legend + theme(plot.background = element_rect(fill = "#8ba761", color = NA), 
-  #                                                 text = element_text(color = "black")), x=0.65, y=.38, width=0.25, height=0.265) # +
-
-
-  # Save figure 
-  if(!file.exists(bivarplotname)){
-    ggsave(filename = bivarplotname,
-           plot = p2alone, width=10, height=8, units="in")
-  
-    ggsave(filename = bivarlegendname,
-           plot = legend, width=2, height=2, units="in")
-  }
-  
   #### Bird density plot ####
-  birdplotname <- paste0(figfolder,"BirdDensityPlots/DensityMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
+  birdplotname <- paste0(figfolder,"BirdDensityPlots/DensityMap_",studyareaname,"_",taxaLabel,"_",monthsname,"_", timeofday, ".png")
   
   p3 <- ggplot() +
     geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
-    # geom_sf(data=finalNoBird, fill="#73b2ff", color="lightgray") + 
-    geom_sf(data=finalBird,aes(fill = DensBird), color="lightgray") +
-    scale_fill_gradientn(colours=cols, trans="log10", labels=scales::label_number(),name="Density \n(Ind'ls/km\u00b2)") +
+    geom_sf(data=finalNoBird, color="darkgray", fill=NA) +
+    geom_sf(data=finalBird,aes(fill = DensBird), color="darkgray") +
+    scale_fill_gradientn(colours=cols, trans="log10", labels=scales::label_number(),name="Density \n(Ind'ls/km\u00b2)", na.value="white") +
     # scale_fill_steps(trans="log",low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::label_number(), 
     #                  name="Density \n(Ind'ls/km\u00b2)", guide = guide_coloursteps(show.limits = TRUE)) + 
     scale_x_continuous(expand = c(0, 0)) +
@@ -459,25 +398,29 @@ plotResults <- function(basemap,
 
   #### Combo plot ####
   
-  comboname <- paste0(figfolder,"ComboPlot_",studyareaname,"_",taxaLabel,"_",monthsname,"_NightOnly",night,".png")
+  comboname <- paste0(figfolder,"ComboPlot_",studyareaname,"_",taxaLabel,"_",monthsname,"_", timeofday, ".png")
   
   # Set matrix for layout of plots 1-5
-  lay <- rbind(c(1,1,1,2,3,3,3,3),
-               c(4,4,4,4,5,5,5,5))
+  lay <- rbind(c(1,1,1),
+               c(2,2,2))
   
   # Turn plots into "graphical objects" (aka grobs)
-  p2g <- as_grob(p2)
   p1g <- as_grob(p1)
   p3g <- as_grob(p3)
-  p0g <- as_grob(p0)
-  
+
   # Arrange grobs by layout 
-  combo <- grid.arrange(grobs=gList(p2g, leggrob, p1g, p3g, p0g), layout_matrix=lay)
+  combo <- grid.arrange(grobs=gList(p1g, p3g), layout_matrix=lay)
   
   # Add custom title 
-  titletext <-  ifelse(night == TRUE, 
-        paste0(taxaLabel, " and Nighttime Vessel Traffic\n", studyareaname, " (",monthsname," 2015-2022)"), 
-        paste0(taxaLabel, " and Vessel Traffic\n", studyareaname, " (",monthsname," 2015-2022)"))
+  if(timeofday == "Night"){ 
+    titletext <- paste0(taxaLabel, " and Nighttime Vessel Traffic\n", studyareaname, " (",monthsname," 2015-2022)")
+  }
+  if(timeofday == "Day"){ 
+    titletext <- paste0(taxaLabel, " and Daytime Vessel Traffic\n", studyareaname, " (",monthsname," 2015-2022)")
+  }
+  if(timeofday == "All"){ 
+    titletext <- paste0(taxaLabel, " and Vessel Traffic\n", studyareaname, " (",monthsname," 2015-2022)")
+  }
   
   combofinal <- annotate_figure(combo, top=text_grob(titletext, color = "black", face = "bold", size = 20))
   
@@ -486,7 +429,7 @@ plotResults <- function(basemap,
   
   # Save output 
   ggsave(filename = comboname,
-         plot = combofinal, width=18, height=10, units="in")
+         plot = combofinal, width=15, height=10, units="in")
 }
 
   
