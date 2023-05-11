@@ -300,9 +300,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   
   # # Loop through each ship type and calculate summary statistics
   allTypes <- unique(AISjoined$AIS_Type)
-  
-  AISjoined$dayofmonth <- day(AISjoined$Time.x)
-  
+
   # Calculate summary stats for each ship type
   for (k in 1:length(allTypes)){
     # Select ship type
