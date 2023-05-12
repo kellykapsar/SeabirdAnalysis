@@ -67,11 +67,11 @@ metricName <-"Hours"
 timeofday <- "Night" #If true, will only calculate nighttime vessel traffic (ignoring daytime)
 # If false, will calculate all vessel traffic, including both day and night
 
-# months <- c(9:11) # Numeric value(s) of months to be included in the analysis
-months <- c(6:8)
+months <- c(9:11) # Numeric value(s) of months to be included in the analysis
+# months <- c(6:8)
 
-# monthsname <- "Fall" # Text label describing the numeric months in the analysis (e.g., "Summer", "Annual")
-monthsname <- "Summer"
+monthsname <- "Fall" # Text label describing the numeric months in the analysis (e.g., "Summer", "Annual")
+# monthsname <- "Summer"
 
 startyear <- 2006 # Earliest year for which bird observations will be included in the analysis 
 # NOTE: start year is for seabird observations only. Vessel traffic includes all data from 2015-2020
@@ -202,7 +202,7 @@ source("./Seabird_Vessel_Analysis_Functions.R")
 #                                                          filedir=hexList,
 #                                                          metric=metric,
 #                                                          timeofday=timeofday)})
-# # NORTHERN BERING & CHUKCHI
+# # # NORTHERN BERING & CHUKCHI
 # lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
 #                                                          taxaLabel= names(AllAKList[x]),
 #                                                          hexMask=hexMask,
@@ -237,46 +237,31 @@ source("./Seabird_Vessel_Analysis_Functions.R")
 
 ################################# RESULTS PLOTS #################################
 # Plots for All Alaska  
-# lapply(1:length(AleutList), function(x){tryCatch(plotResults(studyarea=uni,
-#                                                             studyareaname = "Eastern Aleutians",
-#                                                             basemap=basemap,
-#                                                             figfolder="../Figures/Aleutians/",
-#                                                             savefolder=savefolder,
-#                                                             monthsname=monthsname,
-#                                                             taxaLabel=names(AleutList[x]),
-#                                                             timeofday=timeofday,
-#                                                             metricName=metricName),error=function(e) NULL)})
-# 
-# 
-# lapply(1:length(GOAList), function(x){tryCatch(plotResults(studyarea=goa, 
-#                                                              studyareaname = "Gulf of Alaska",
-#                                                              basemap=basemap,
-#                                                              figfolder="../Figures/GOA/",
-#                                                              savefolder=savefolder,
-#                                                              monthsname=monthsname,
-#                                                              taxaLabel=names(GOAList[x]),
-#                                                              timeofday=timeofday,
-#                                                              metricName=metricName),error=function(e) NULL)})
+lapply(1:length(AleutList), function(x){tryCatch(summstats(taxaLabel=names(AleutList[x]),
+                                                           studyarea=uni, 
+                                                           studyareaname = "Eastern Aleutians",
+                                                           savefolder="../Data_Processed/",
+                                                           figfolder="../Figures/Aleutians/", 
+                                                           basemap=basemap),error=function(e) NULL)})
 
-lapply(1:length(BerChukList), function(x){tryCatch(plotResults(studyarea=berchuk, 
-                                                           studyareaname = "Northern Bering & Chukchi Seas",
-                                                           basemap=basemap,
-                                                           figfolder="../Figures/NorthBeringAndChukchi/",
-                                                           savefolder=savefolder,
-                                                           monthsname=monthsname,
-                                                           taxaLabel=names(BerChukList[x]),
-                                                           timeofday=timeofday,
-                                                           metricName=metricName),error=function(e) NULL)})
-
-# lapply(1:length(AllAKList), function(x){tryCatch(plotResults(studyarea=npac, 
-#                                                              studyareaname = "All Alaska",
-#                                                              basemap=basemap,
-#                                                              figfolder="../Figures/AllAlaska/",
-#                                                              savefolder=savefolder,
-#                                                              monthsname=monthsname,
-#                                                              taxaLabel=names(AllAKList[x]),
-#                                                              timeofday=timeofday,
-#                                                              metricName=metricName),error=function(e) NULL)})
+lapply(1:length(GOAList), function(x){tryCatch(summstats(taxaLabel=names(GOAList[x]),
+                                                           studyarea=goa, 
+                                                           studyareaname = "Gulf of Alaska",
+                                                           savefolder="../Data_Processed/",
+                                                           figfolder="../Figures/GOA/", 
+                                                           basemap=basemap),error=function(e) NULL)})
+lapply(1:length(BerChukList), function(x){tryCatch(summstats(taxaLabel=names(BerChukList[x]),
+                                                         studyarea=berchuk, 
+                                                         studyareaname = "Northern Bering & Chukchi Seas",
+                                                         savefolder="../Data_Processed/",
+                                                         figfolder="../Figures/NorthBeringAndChukchi/", 
+                                                         basemap=basemap),error=function(e) NULL)})
+lapply(1:length(AllAKList), function(x){tryCatch(summstats(taxaLabel=names(AllAKList[x]),
+                                                             studyarea=npac, 
+                                                             studyareaname = "All Alaska",
+                                                             savefolder="../Data_Processed/",
+                                                             figfolder="../Figures/AllAlaska/", 
+                                                             basemap=basemap),error=function(e) NULL)})
 
 # browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ")
 
