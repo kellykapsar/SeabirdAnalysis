@@ -240,6 +240,9 @@ birdHexesByEffort <- function(dataobs,
 
     df$risk <- factor(df$risk,  c("low","medium","high","veryhigh"))
     
+    df$season <- mnthsnam
+    df$timeofday <- timeofday
+    
     # Save data 
     st_write(df, paste0(savefolder,"FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_", timeofday,".shp"))
   }
@@ -281,15 +284,28 @@ plotResults <- function(basemap,
   #### Traffic plot ####
   traffplotname <- paste0(figfolder,"TrafficPlots/TrafficDensity_", studyareaname,"_",monthsname,"_",timeofday,".png")
   
+  if(studyareaname %in% c("All Alaska", "Gulf of Alaska", "Eastern Aleutians")){
+    br <- c(0,10,100, 1000, 10000, 100000, 100000)
+    lims <- c(0,150000)
+  }
+  if(studyareaname == "Northern Bering & Chukchi Seas"){
+    br <- c(0,10,100, 1000, 10000)
+    lims <- c(0,50000)
+  }
+
   p0 <- ggplot() +
     geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
     geom_sf(data=df,aes(fill = AllShip), color="darkgray") +
-    # scale_fill_steps(trans="log",low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::comma,
+    # scale_fill_steps(trans="log",n.breaks=4, low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::comma,
     #                  name="Total Hours\nof Vessel Traffic", guide = guide_coloursteps(show.limits = TRUE)) +
-    scale_fill_gradientn(colours=cols, trans="log10", labels=scales::label_number(),name="Vessel Activity\n(Hours)", na.value="white") +
+    scale_fill_gradientn(colours=cols, trans="pseudo_log", breaks=br, labels=scales::label_comma(),name="Vessel Activity\n(Hours)", na.value="white", limits=lims) +
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
     # labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
+    guides(fill = guide_colourbar(title.hjust = 0.5,
+                                  ticks.colour="black", 
+                                  frame.colour = "black", 
+                                  ticks.linewidth = 0.75)) +
     theme_bw() +
     theme(text = element_text(size = 18),
           plot.title = element_text(hjust = 0.5),
@@ -427,9 +443,11 @@ plotResults <- function(basemap,
   # Make panel background white
   combofinal <- combofinal + theme(panel.background = element_rect(fill = "white"))
   
-  # Save output 
+  # Save figure
+  if(!file.exists(comboname)){
   ggsave(filename = comboname,
          plot = combofinal, width=15, height=10, units="in")
+  }
 }
 
   

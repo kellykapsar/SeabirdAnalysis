@@ -170,93 +170,93 @@ source("./Seabird_Vessel_Analysis_Functions.R")
 #                  timeofday=timeofday)
 
 # For a list of species
-## ALEUTIANS
-lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
-                                                         taxaLabel= names(AllAKList[x]),
-                                                         hexMask=hexMask,
-                                                         effortThreshold=effortThreshold,
-                                                         loc=loc,
-                                                         mnths=months,
-                                                         mnthsnam=monthsname,
-                                                         studyarea=uni, 
-                                                         studyareaname = "Eastern Aleutians",
-                                                         figfolder="../Figures/Aleutians/",
-                                                         startyr=startyear,
-                                                         savefolder=savefolder,
-                                                         filedir=hexList,
-                                                         metric=metric,
-                                                         timeofday=timeofday)})
-## GULF OF ALASKA
-lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
-                                                         taxaLabel= names(AllAKList[x]),
-                                                         hexMask=hexMask,
-                                                         effortThreshold=effortThreshold,
-                                                         loc=loc,
-                                                         mnths=months,
-                                                         mnthsnam=monthsname,
-                                                         studyarea=goa, 
-                                                         studyareaname = "Gulf of Alaska",
-                                                         figfolder="../Figures/GOA/",
-                                                         startyr=startyear,
-                                                         savefolder=savefolder,
-                                                         filedir=hexList,
-                                                         metric=metric,
-                                                         timeofday=timeofday)})
-# NORTHERN BERING & CHUKCHI
-lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
-                                                         taxaLabel= names(AllAKList[x]),
-                                                         hexMask=hexMask,
-                                                         effortThreshold=effortThreshold,
-                                                         loc=loc,
-                                                         mnths=months,
-                                                         mnthsnam=monthsname,
-                                                         studyarea=berchuk, 
-                                                         studyareaname = "Northern Bering & Chukchi Seas",
-                                                         figfolder="../Figures/NorthBeringAndChukchi/",
-                                                         startyr=startyear,
-                                                         savefolder=savefolder,
-                                                         filedir=hexList,
-                                                         metric=metric,
-                                                         timeofday=timeofday)})
-## ALL ALASKA 
-lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
-                                                         taxaLabel= names(AllAKList[x]),
-                                                         hexMask=hexMask,
-                                                         effortThreshold=effortThreshold,
-                                                         loc=loc,
-                                                         mnths=months,
-                                                         mnthsnam=monthsname,
-                                                         startyr=startyear,
-                                                         studyarea=npac, 
-                                                         studyareaname = "All Alaska",
-                                                         figfolder="../Figures/AllAlaska/",
-                                                         savefolder=savefolder,
-                                                         filedir=hexList,
-                                                         metric=metric,
-                                                         timeofday=timeofday)})
+# ## ALEUTIANS
+# lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
+#                                                          taxaLabel= names(AllAKList[x]),
+#                                                          hexMask=hexMask,
+#                                                          effortThreshold=effortThreshold,
+#                                                          loc=loc,
+#                                                          mnths=months,
+#                                                          mnthsnam=monthsname,
+#                                                          studyarea=uni,
+#                                                          studyareaname = "Eastern Aleutians",
+#                                                          figfolder="../Figures/Aleutians/",
+#                                                          startyr=startyear,
+#                                                          savefolder=savefolder,
+#                                                          filedir=hexList,
+#                                                          metric=metric,
+#                                                          timeofday=timeofday)})
+# ## GULF OF ALASKA
+# lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
+#                                                          taxaLabel= names(AllAKList[x]),
+#                                                          hexMask=hexMask,
+#                                                          effortThreshold=effortThreshold,
+#                                                          loc=loc,
+#                                                          mnths=months,
+#                                                          mnthsnam=monthsname,
+#                                                          studyarea=goa,
+#                                                          studyareaname = "Gulf of Alaska",
+#                                                          figfolder="../Figures/GOA/",
+#                                                          startyr=startyear,
+#                                                          savefolder=savefolder,
+#                                                          filedir=hexList,
+#                                                          metric=metric,
+#                                                          timeofday=timeofday)})
+# # NORTHERN BERING & CHUKCHI
+# lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
+#                                                          taxaLabel= names(AllAKList[x]),
+#                                                          hexMask=hexMask,
+#                                                          effortThreshold=effortThreshold,
+#                                                          loc=loc,
+#                                                          mnths=months,
+#                                                          mnthsnam=monthsname,
+#                                                          studyarea=berchuk,
+#                                                          studyareaname = "Northern Bering & Chukchi Seas",
+#                                                          figfolder="../Figures/NorthBeringAndChukchi/",
+#                                                          startyr=startyear,
+#                                                          savefolder=savefolder,
+#                                                          filedir=hexList,
+#                                                          metric=metric,
+#                                                          timeofday=timeofday)})
+# ## ALL ALASKA
+# lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
+#                                                          taxaLabel= names(AllAKList[x]),
+#                                                          hexMask=hexMask,
+#                                                          effortThreshold=effortThreshold,
+#                                                          loc=loc,
+#                                                          mnths=months,
+#                                                          mnthsnam=monthsname,
+#                                                          startyr=startyear,
+#                                                          studyarea=npac,
+#                                                          studyareaname = "All Alaska",
+#                                                          figfolder="../Figures/AllAlaska/",
+#                                                          savefolder=savefolder,
+#                                                          filedir=hexList,
+#                                                          metric=metric,
+#                                                          timeofday=timeofday)})
 
 ################################# RESULTS PLOTS #################################
 # Plots for All Alaska  
-lapply(1:length(AleutList), function(x){tryCatch(plotResults(studyarea=uni,
-                                                            studyareaname = "Eastern Aleutians",
-                                                            basemap=basemap,
-                                                            figfolder="../Figures/Aleutians/",
-                                                            savefolder=savefolder,
-                                                            monthsname=monthsname,
-                                                            taxaLabel=names(AleutList[x]),
-                                                            timeofday=timeofday,
-                                                            metricName=metricName),error=function(e) NULL)})
-
-
-lapply(1:length(GOAList), function(x){tryCatch(plotResults(studyarea=goa, 
-                                                             studyareaname = "Gulf of Alaska",
-                                                             basemap=basemap,
-                                                             figfolder="../Figures/GOA/",
-                                                             savefolder=savefolder,
-                                                             monthsname=monthsname,
-                                                             taxaLabel=names(GOAList[x]),
-                                                             timeofday=timeofday,
-                                                             metricName=metricName),error=function(e) NULL)})
+# lapply(1:length(AleutList), function(x){tryCatch(plotResults(studyarea=uni,
+#                                                             studyareaname = "Eastern Aleutians",
+#                                                             basemap=basemap,
+#                                                             figfolder="../Figures/Aleutians/",
+#                                                             savefolder=savefolder,
+#                                                             monthsname=monthsname,
+#                                                             taxaLabel=names(AleutList[x]),
+#                                                             timeofday=timeofday,
+#                                                             metricName=metricName),error=function(e) NULL)})
+# 
+# 
+# lapply(1:length(GOAList), function(x){tryCatch(plotResults(studyarea=goa, 
+#                                                              studyareaname = "Gulf of Alaska",
+#                                                              basemap=basemap,
+#                                                              figfolder="../Figures/GOA/",
+#                                                              savefolder=savefolder,
+#                                                              monthsname=monthsname,
+#                                                              taxaLabel=names(GOAList[x]),
+#                                                              timeofday=timeofday,
+#                                                              metricName=metricName),error=function(e) NULL)})
 
 lapply(1:length(BerChukList), function(x){tryCatch(plotResults(studyarea=berchuk, 
                                                            studyareaname = "Northern Bering & Chukchi Seas",
@@ -268,15 +268,15 @@ lapply(1:length(BerChukList), function(x){tryCatch(plotResults(studyarea=berchuk
                                                            timeofday=timeofday,
                                                            metricName=metricName),error=function(e) NULL)})
 
-lapply(1:length(AllAKList), function(x){tryCatch(plotResults(studyarea=npac, 
-                                                             studyareaname = "All Alaska",
-                                                             basemap=basemap,
-                                                             figfolder="../Figures/AllAlaska/",
-                                                             savefolder=savefolder,
-                                                             monthsname=monthsname,
-                                                             taxaLabel=names(AllAKList[x]),
-                                                             timeofday=timeofday,
-                                                             metricName=metricName),error=function(e) NULL)})
+# lapply(1:length(AllAKList), function(x){tryCatch(plotResults(studyarea=npac, 
+#                                                              studyareaname = "All Alaska",
+#                                                              basemap=basemap,
+#                                                              figfolder="../Figures/AllAlaska/",
+#                                                              savefolder=savefolder,
+#                                                              monthsname=monthsname,
+#                                                              taxaLabel=names(AllAKList[x]),
+#                                                              timeofday=timeofday,
+#                                                              metricName=metricName),error=function(e) NULL)})
 
 # browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ")
 
