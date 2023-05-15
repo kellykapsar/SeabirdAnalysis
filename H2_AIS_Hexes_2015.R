@@ -157,16 +157,23 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
     arrange(AIS_ID, Time) %>% 
     mutate(timediff = as.numeric(difftime(Time,lag(Time),units=c("hours"))),
            distdiff = sqrt((y-lag(y))^2 + (x-lag(x))^2)/1000) %>% 
-    filter(timediff > 0) %>% 
-    filter(distdiff > 0) %>% 
+    filter(timediff > 0 | is.na(timediff)) %>% 
+    filter(distdiff > 0 | is.na(distdiff)) %>% 
     mutate(speed = distdiff/timediff) 
   
   metadata$redund_aisids <- length(unique(AISspeed2$AIS_ID))
   metadata$redund_mmsi <- length(unique(AISspeed2$MMSI))
   metadata$redund_pts <- length(AISspeed2$MMSI)
   
-  # Implement speed filter of 100 km/hr (also remove NA speed)
-  AISspeed1 <- AISspeed2 %>% dplyr::filter(speed < 100) %>% dplyr::filter(!is.na(speed))
+  # Remove points for which speed could not be
+  AISspeed1 <- AISspeed2 %>% dplyr::filter(!is.na(speed))
+  
+  metadata$nospeed_aisids <- length(unique(AISspeed1$AIS_ID))
+  metadata$nospeed_mmsi <- length(unique(AISspeed1$MMSI))
+  metadata$nospeed_pts <- length(AISspeed1$MMSI)
+  
+  # Implement speed filter of 100 km/hr 
+  AISspeed1b <- AISspeed1 %>% dplyr::filter(speed < 100)
   
   metadata$speed_aisids <- length(unique(AISspeed1$AIS_ID))
   metadata$speed_mmsi <- length(unique(AISspeed1$MMSI))
@@ -176,7 +183,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   # system.time(joinTest <- joinTest_step1[!is.na(joinTest_step1$hexID),]) # Slow
   # system.time(na.omit(joinTest_step1[,c("hexID")])) # Slowest
   # system.time(joinTest_step1[-which(is.na(joinTest_step1$hexID)),]) # Slower 
-  AISspeed0 <- subset(AISspeed1, !is.na(AISspeed1$hexID))  # Fastest
+  AISspeed0 <- subset(AISspeed1b, !is.na(AISspeed1b$hexID))  # Fastest
  
   AISspeed <- AISspeed0 %>% rename(long=Longitude, lat=Latitude)
   
@@ -300,7 +307,8 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   
   # # Loop through each ship type and calculate summary statistics
   allTypes <- unique(AISjoined$AIS_Type)
-
+  
+  
   # Calculate summary stats for each ship type
   for (k in 1:length(allTypes)){
     # Select ship type
@@ -309,44 +317,49 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
     
     if(nightonly == TRUE){
       
-      # Calculate average speed within hex grid 
-      joinOut <- AISfilteredType %>%
-        group_by(hexID, MMSI, AIS_ID) %>%
-        summarize(starttime = min(Time.x), 
-                  endtime = max(Time.x)) %>% 
-        mutate(N_hours = difftime(endtime, starttime, units="hours")) %>% 
-        ungroup() %>% 
-        group_by(hexID) %>% 
-        summarize(Hrs=as.numeric(sum(N_hours)),
-                  nShp=length(unique(MMSI)),
-                  OpD=length(unique(AIS_ID)))
+      # Calculate total number of hours of daytime and nighttime transmissions 
+      # for each unique ship in each day in each hex
+      # This method accounts for high latitude days where days may extend past midnight. 
+      AIShours <- AISfilteredType %>% 
+        arrange(Time.x) %>% # arrange by time 
+        # Create new sequence of row numbers for each unique day/ship/hex/timeofday combo
+        group_by(AIS_ID, hexID, MMSI,timeofday) %>% 
+        mutate(rownum = 1:n()) %>%
+        ungroup()
+      # ID first signal in each of the above ID'd sequences
+      AIShours <- AIShours %>% mutate(daychange=ifelse(rownum == 1, 1, 0))
       
-      joinOutDay <- AISfilteredType %>%
-        filter(timeofday != "night") %>% 
-        group_by(hexID, MMSI, AIS_ID) %>%
-        summarize(starttime = min(Time.x), 
-                  endtime = max(Time.x)) %>% 
-        mutate(N_hours = difftime(endtime, starttime, units="hours")) %>% 
-        ungroup() %>% 
-        group_by(hexID) %>% 
-        summarize(D_Hrs=as.numeric(sum(N_hours)),
-                  D_nShp=length(unique(MMSI)),
-                  D_OpD=length(unique(AIS_ID)))
+      AIShoursums <- AIShours %>% 
+        # Remove these signals because there was at least one change in day/ship/hex/timeofday
+        # between the signals and so we don't wnat to use the time diff value in our total 
+        # time calculation below. 
+        filter(daychange != 1) %>% 
+        group_by(AIS_ID, hexID, MMSI, timeofday) %>% 
+        # Calculate the total amount of time in each unique day/ship/hex/timeofday state 
+        summarize(Hrs = sum(timediff)) 
       
-      joinOutNight <- AISfilteredType %>%
+      nightHrs <- AIShoursums %>% 
         filter(timeofday == "night") %>% 
-        group_by(hexID, MMSI, AIS_ID) %>%
-        summarize(starttime = min(Time.x), 
-                  endtime = max(Time.x)) %>% 
-        mutate(N_hours = difftime(endtime, starttime, units="hours")) %>% 
-        ungroup() %>% 
         group_by(hexID) %>% 
-        summarize(N_Hrs=as.numeric(sum(N_hours)),
+        summarize(N_Hrs = sum(Hrs),
                   N_nShp=length(unique(MMSI)),
                   N_OpD=length(unique(AIS_ID)))
       
-      joinOutNew <- left_join(joinOut, joinOutNight, by=c("hexID"))
-      joinOutNew <- left_join(joinOutNew, joinOutDay, by=c("hexID"))
+      dayHrs <- AIShoursums %>% 
+        filter(timeofday == "day") %>% 
+        group_by(hexID) %>% 
+        summarize(D_Hrs = sum(Hrs),
+                  D_nShp=length(unique(MMSI)),
+                  D_OpD=length(unique(AIS_ID)))
+      
+      allHrs <- AIShoursums %>%
+        group_by(hexID) %>% 
+        summarize(Hrs=as.numeric(sum(Hrs)),
+                  nShp=length(unique(MMSI)),
+                  OpD=length(unique(AIS_ID)))
+
+      joinOutNew <- left_join(allHrs, nightHrs, by=c("hexID"))
+      joinOutNew <- left_join(joinOutNew, dayHrs, by=c("hexID"))
       joinOutNew <- joinOutNew %>% 
         mutate_at(c(1:ncol(joinOutNew)), ~replace_na(.,0))
     }
@@ -370,44 +383,49 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   
   # Calculate summary stats for all ship types in aggregate
   # Calculate average speed within hex grid 
-  allShips <- AISjoined %>%
-    group_by(hexID, MMSI, AIS_ID) %>%
-    summarize(starttime = min(Time.x), 
-              endtime = max(Time.x)) %>% 
-    mutate(N_hours = difftime(endtime, starttime, units="hours")) %>% 
-    ungroup() %>% 
-    group_by(hexID) %>% 
-    summarize(Hrs=as.numeric(sum(N_hours)),
-              nShp=length(unique(MMSI)),
-              OpD=length(unique(AIS_ID)))
+  # Calculate total number of hours of daytime and nighttime transmissions 
+  # for each unique ship in each day in each hex
+  # This method accounts for high latitude days where days may extend past midnight. 
+  TotAIShours <- AISjoined %>% 
+    arrange(Time.x) %>% # arrange by time 
+    # Create new sequence of row numbers for each unique day/ship/hex/timeofday combo
+    group_by(AIS_ID, hexID, MMSI,timeofday) %>% 
+    mutate(rownum = 1:n()) %>%
+    ungroup()
+  # ID first signal in each of the above ID'd sequences
+  TotAIShours <- TotAIShours %>% mutate(daychange=ifelse(rownum == 1, 1, 0))
   
+  TotAIShoursums <- TotAIShours %>% 
+    # Remove these signals because there was at least one change in day/ship/hex/timeofday
+    # between the signals and so we don't wnat to use the time diff value in our total 
+    # time calculation below. 
+    filter(daychange != 1) %>% 
+    group_by(AIS_ID, hexID, MMSI, timeofday) %>% 
+    # Calculate the total amount of time in each unique day/ship/hex/timeofday state 
+    summarize(Hrs = sum(timediff)) 
   
-  allShipsDay <- AISjoined %>%
-    filter(timeofday != "night") %>% 
-    group_by(hexID, MMSI, AIS_ID) %>%
-    summarize(starttime = min(Time.x), 
-              endtime = max(Time.x)) %>% 
-    mutate(N_hours = difftime(endtime, starttime, units="hours")) %>% 
-    ungroup() %>% 
-    group_by(hexID) %>% 
-    summarize(D_Hrs=as.numeric(sum(N_hours)),
-              D_nShp=length(unique(MMSI)),
-              D_OpD=length(unique(AIS_ID)))
-  
-  allShipsNight <- AISjoined %>%
+  TotnightHrs <- TotAIShoursums %>% 
     filter(timeofday == "night") %>% 
-    group_by(hexID, MMSI, AIS_ID) %>%
-    summarize(starttime = min(Time.x), 
-              endtime = max(Time.x)) %>% 
-    mutate(N_hours = difftime(endtime, starttime, units="hours")) %>% 
-    ungroup() %>% 
     group_by(hexID) %>% 
-    summarize(N_Hrs=as.numeric(sum(N_hours)),
+    summarize(N_Hrs = sum(Hrs),
               N_nShp=length(unique(MMSI)),
               N_OpD=length(unique(AIS_ID)))
   
-  allShipsNew <- left_join(allShips, allShipsNight, by=c("hexID"))
-  allShipsNew <- left_join(allShipsNew, allShipsDay, by=c("hexID"))
+  TotdayHrs <- TotAIShoursums %>% 
+    filter(timeofday == "day") %>% 
+    group_by(hexID) %>% 
+    summarize(D_Hrs = sum(Hrs),
+              D_nShp=length(unique(MMSI)),
+              D_OpD=length(unique(AIS_ID)))
+  
+  TotallHrs <- TotAIShoursums %>%
+    group_by(hexID) %>% 
+    summarize(Hrs=as.numeric(sum(Hrs)),
+              nShp=length(unique(MMSI)),
+              OpD=length(unique(AIS_ID)))
+  
+  allShipsNew <- left_join(TotallHrs, TotnightHrs, by=c("hexID"))
+  allShipsNew <- left_join(allShipsNew, TotdayHrs, by=c("hexID"))
   
   colnames(allShipsNew)[2:ncol(allShipsNew)] <- paste0(colnames(allShipsNew)[2:ncol(allShipsNew)],"_Al")
   
@@ -445,18 +463,18 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
 ####################################################################
 
 
-# Import hex grid
-hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
-
-nightonly <- TRUE
-
-# Pull up list of AIS files
-files <-  list.files("D:/AlaskaConservation_AIS_20210225/Data_Raw/2015/", pattern='.csv', full.names=T)
-
-# Separate file names into monthly lists
-jan <- files[grepl("-01-", files)]
-
-csvList <- jan[27:28]
+# # Import hex grid
+# hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
+# 
+# nightonly <- TRUE
+# 
+# # Pull up list of AIS files
+# files <-  list.files("D:/AlaskaConservation_AIS_20210225/Data_Raw/2015/", pattern='.csv', full.names=T)
+# 
+# # Separate file names into monthly lists
+# jan <- files[grepl("-01-", files)]
+# 
+# csvList <- jan[27:28]
 
 # # Separate file names into monthly lists
 # jun <- files[grepl("-06-", files)]
