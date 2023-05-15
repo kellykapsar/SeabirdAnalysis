@@ -156,6 +156,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
     # project into Alaska Albers (or other CRS that doesn't create huge gap in mid-Bering with -180W and 180E)
     st_transform(crs=3338) %>%
     st_join(hexgrid["hexID"]) %>% 
+    # Double checked that as.POSIXct does not change values from original
     mutate(Time = as.POSIXct(Time, format="%Y-%m-%d %H:%M:%OS", tz="GMT")) %>% # GMT == UTC
     arrange(Time) 
   
@@ -300,7 +301,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
       # for each unique ship in each day in each hex
       # This method accounts for high latitude days where days may extend past midnight. 
       AIShours <- AISfilteredType %>% 
-        arrange(Time.x) %>% # arrange by time 
+        arrange(Time) %>% # arrange by time 
         # Create new sequence of row numbers for each unique day/ship/hex/timeofday combo
         group_by(AIS_ID, hexID, MMSI,timeofday) %>% 
         mutate(rownum = 1:n()) %>%
@@ -366,7 +367,7 @@ FWS.AIS.SpeedHex <- function(csvList, hexgrid, nightonly=TRUE){
   # for each unique ship in each day in each hex
   # This method accounts for high latitude days where days may extend past midnight. 
   TotAIShours <- AISjoined %>% 
-    arrange(Time.x) %>% # arrange by time 
+    arrange(Time) %>% # arrange by time 
     # Create new sequence of row numbers for each unique day/ship/hex/timeofday combo
     group_by(AIS_ID, hexID, MMSI,timeofday) %>% 
     mutate(rownum = 1:n()) %>%
@@ -528,20 +529,23 @@ jun <- files[grepl("exactEarth_202106", files)]
 # nov <- files[grepl("exactEarth_202111", files)]
 # dec <- files[grepl("exactEarth_202112", files)]
 
+print(paste0(as.character(length(jan)), " files loaded for january"))
+
 # Create a list of lists of all csv file names grouped by month
 csvsByMonth <- list(jan, feb, mar, apr, may, jun)
 
 # Pull up hex grid
 hexgrid <- st_read("../Data_Raw/BlankHexes.shp")
+print("hexgridloaded")
 
 ## MSU HPCC: https://wiki.hpcc.msu.edu/display/ITH/R+workshop+tutorial#Rworkshoptutorial-Submittingparalleljobstotheclusterusing{doParallel}:singlenode,multiplecores
 # Request a single node (this uses the "multicore" functionality)
 registerDoParallel(cores=as.numeric(Sys.getenv("SLURM_CPUS_ON_NODE")[1]))
-
+print("paralellization registered")
 # create a blank list to store the results (I truncated the code before the ship-type coding, and just returned the sf of all that day's tracks so I didn't 
 #       have to debug the raster part. If we're writing all results within the function - as written here and as I think we should do - the format of the blank list won't really matter.)
 res=list()
-
+print("res list created")
 # foreach and %dopar% work together to implement the parallelization
 # note that you have to tell each core what packages you need (another reason to minimize library use), so it can pull those over
 # I'm using tidyverse since it combines dplyr and tidyr into one library (I think)
