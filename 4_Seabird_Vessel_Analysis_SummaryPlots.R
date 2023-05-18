@@ -6,13 +6,13 @@ library(tidyverse)
 loc <- "Gulf of Alaska"
 
 
-files <- intersect(list.files("../Data_Processed/", pattern=loc, full.names=T), 
-                   list.files("../Data_Processed/", pattern=".shp", full.names = T))
+files <- intersect(list.files("../Data_Processed/FinalShapefiles/", pattern=loc, full.names=T), 
+                   list.files("../Data_Processed/FinalShapefiles/", pattern=".shp", full.names = T))
 
 
 
 
-df <- data.frame(do.call(rbind, strsplit(files, "_"))) %>% select(-X1, -X2, -X6)
+df <- data.frame(do.call(rbind, strsplit(files, "_"))) %>% select(-X1, -X2)
 colnames(df) <- c("location", "taxa", "season")
 df$season <- factor(df$season, levels=c("Summer", "Fall"))
 df$nhex <- NA
