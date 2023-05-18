@@ -64,8 +64,7 @@ metricName <-"Hours"
 ## OperatingDays = number of ship days per month (i.e., the same ship in the same hex each day for a month = 30)
 ## Ships = number of unique ships per month (i.e., the same ship int h same hex each day for a month = 1)
 
-timeofday <- "Night" #If true, will only calculate nighttime vessel traffic (ignoring daytime)
-# If false, will calculate all vessel traffic, including both day and night
+timeofday <- "All" 
 
 months <- c(9:11) # Numeric value(s) of months to be included in the analysis
 # months <- c(6:8)
@@ -148,29 +147,29 @@ names(BerChukList) <- c("Seaducks", "Shearwaters", "Auklets")
 #### Load in Functions #### 
 ###########################
 
-source("./Seabird_Vessel_Analysis_Functions.R")
+source("./3a_Seabird_Vessel_Analysis_Functions.R")
 
 
 ##########################
 #### Run Analysis #### 
 ##########################
 
-# For one species 
-# birdHexesByEffort(taxaNames= aethia, 
+# For one species
+# birdHexesByEffort(taxaNames= aethia,
 #                  taxaLabel= "Aethia",
-#                  hexMask=hexMask, 
-#                  effortThreshold=effortThreshold, 
+#                  hexMask=hexMask,
+#                  effortThreshold=effortThreshold,
 #                  loc=loc,
 #                  mnths=months,
 #                  mnthsnam=monthsname,
 #                  startyr=startyear,
 #                  savefolder=savefolder,
-#                  filedir=hexList, 
-#                  metric=metric, 
+#                  filedir=hexList,
+#                  metric=metric,
 #                  timeofday=timeofday)
 
 # For a list of species
-# ## ALEUTIANS
+# # ALEUTIANS
 # lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
 #                                                          taxaLabel= names(AllAKList[x]),
 #                                                          hexMask=hexMask,
@@ -238,32 +237,32 @@ source("./Seabird_Vessel_Analysis_Functions.R")
 ################################# RESULTS PLOTS #################################
 # Plots for All Alaska  
 lapply(1:length(AleutList), function(x){tryCatch(summstats(taxaLabel=names(AleutList[x]),
-                                                           studyarea=uni, 
+                                                           studyarea=uni,
                                                            studyareaname = "Eastern Aleutians",
                                                            savefolder="../Data_Processed/",
-                                                           figfolder="../Figures/Aleutians/", 
+                                                           figfolder="../Figures/Aleutians/",
                                                            basemap=basemap),error=function(e) NULL)})
 
 lapply(1:length(GOAList), function(x){tryCatch(summstats(taxaLabel=names(GOAList[x]),
-                                                           studyarea=goa, 
+                                                           studyarea=goa,
                                                            studyareaname = "Gulf of Alaska",
                                                            savefolder="../Data_Processed/",
-                                                           figfolder="../Figures/GOA/", 
+                                                           figfolder="../Figures/GOA/",
                                                            basemap=basemap),error=function(e) NULL)})
 lapply(1:length(BerChukList), function(x){tryCatch(summstats(taxaLabel=names(BerChukList[x]),
-                                                         studyarea=berchuk, 
+                                                         studyarea=berchuk,
                                                          studyareaname = "Northern Bering & Chukchi Seas",
                                                          savefolder="../Data_Processed/",
-                                                         figfolder="../Figures/NorthBeringAndChukchi/", 
+                                                         figfolder="../Figures/NorthBeringAndChukchi/",
                                                          basemap=basemap),error=function(e) NULL)})
 lapply(1:length(AllAKList), function(x){tryCatch(summstats(taxaLabel=names(AllAKList[x]),
-                                                             studyarea=npac, 
+                                                             studyarea=npac,
                                                              studyareaname = "All Alaska",
                                                              savefolder="../Data_Processed/",
-                                                             figfolder="../Figures/AllAlaska/", 
+                                                             figfolder="../Figures/AllAlaska/",
                                                              basemap=basemap),error=function(e) NULL)})
 
-# browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ")
+browseURL("https://www.youtube.com/watch?v=K1b8AhIsSYQ")
 
 # bird <- st_read("../Data_Processed/ObsInHexes_Fall.shp")
 # ship <- read.csv("../Data_Processed/TraffInHexes_Fall_NightOnlyTRUE.csv")

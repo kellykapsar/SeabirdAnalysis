@@ -268,26 +268,41 @@ summstats <- function(taxaNames,
   
   df <- df %>% dplyr::select(-ClassBird, -QuantBird, -ClassShip, -QuantShip, -risk)
   
-  bothseasons <- df %>% st_drop_geometry() %>% group_by(hexID) %>% summarize(n=n()) %>% filter(n == 4)
+  bothseasons <- df %>% st_drop_geometry() %>% group_by(hexID) %>% summarize(n=n()) %>% filter(n == 6)
   
-  filtdf <- df %>% filter(hexID %in% bothseasons$hexID) %>% mutate(subset = paste0(season, "_", timeofday))
+  subdf <- df %>% filter(hexID %in% bothseasons$hexID) %>% mutate(subset = paste0(season, "_", timeofday))
+  
+  timeofday <- c("All", "Night")
+  filtdf <- data.frame()
+  
+  for(i in 1:2){
+    temp <- subdf[subdf$timeofday == timeofday[i],]
 
-  filtdf$ClassBird <- ifelse(filtdf$AllBird == 0, 0, 
-                      ifelse(c(filtdf$AllBird/filtdf$survEff)<mean(c(filtdf$AllBird/filtdf$survEff)),1,
-                      ifelse(c(filtdf$AllBird/filtdf$survEff)>=c(mean(c(filtdf$AllBird/filtdf$survEff))+sd(c(filtdf$AllBird/filtdf$survEff))),3,2)))
+    temp$ClassBird <- ifelse(temp$AllBird == 0, 0, 
+                        ifelse(c(temp$AllBird/temp$survEff)<mean(c(temp$AllBird/temp$survEff)),1,
+                        ifelse(c(temp$AllBird/temp$survEff)>=c(mean(c(temp$AllBird/temp$survEff))+sd(c(temp$AllBird/temp$survEff))),3,2)))
+    
+    temp$ClassShip <- ifelse(temp$AllShip<mean(temp$AllShip),1,
+                               ifelse(temp$AllShip>=c(mean(temp$AllShip)+sd(temp$AllShip)),3,2))
+    
+    # Evaluate risk levels 
+    temp$risk <- ifelse(temp$ClassBird == 1 & temp$ClassShip == 1, "low",
+                      ifelse(temp$ClassBird == 1 & temp$ClassShip == 2 | temp$ClassBird == 2 & temp$ClassShip == 1, "medium",
+                      ifelse(temp$ClassBird == 1 & temp$ClassShip == 3 | temp$ClassBird == 3 & temp$ClassShip == 1, "medium",
+                      ifelse(temp$ClassBird == 3 & temp$ClassShip == 2 | temp$ClassBird == 2 & temp$ClassShip == 3, "high",
+                      ifelse(temp$ClassBird == 2 & temp$ClassShip == 2, "high",
+                      ifelse(temp$ClassBird == 3 & temp$ClassShip == 3, "veryhigh", NA))))))
+    
+    filtdf <- rbind(filtdf, temp)
+  }
   
-  filtdf$ClassShip <- ifelse(filtdf$AllShip<mean(filtdf$AllShip),1,
-                             ifelse(filtdf$AllShip>=c(mean(filtdf$AllShip)+sd(filtdf$AllShip)),3,2))
+  filtdf$risk <- ordered(filtdf$risk,  levels=c("low","medium","high","veryhigh"))
   
-  # Evaluate risk levels 
-  filtdf$risk <- ifelse(filtdf$ClassBird == 1 & filtdf$ClassShip == 1, "low",
-                    ifelse(filtdf$ClassBird == 1 & filtdf$ClassShip == 2 | filtdf$ClassBird == 2 & filtdf$ClassShip == 1, "medium",
-                    ifelse(filtdf$ClassBird == 1 & filtdf$ClassShip == 3 | filtdf$ClassBird == 3 & filtdf$ClassShip == 1, "medium",
-                    ifelse(filtdf$ClassBird == 3 & filtdf$ClassShip == 2 | filtdf$ClassBird == 2 & filtdf$ClassShip == 3, "high",
-                    ifelse(filtdf$ClassBird == 2 & filtdf$ClassShip == 2, "high",
-                    ifelse(filtdf$ClassBird == 3 & filtdf$ClassShip == 3, "veryhigh", NA))))))
+  # ggplot(subset(filtdf, !is.na(filtdf$risk)), aes(fill=risk, x=subset))+
+  #   geom_bar(position="dodge")
   
-  filtdf$risk <- factor(filtdf$risk,  c("low","medium","high","veryhigh"))
+  
+  st_write(filtdf, paste0(savefolder, "FinalShapefiles/AllSeasonsAllTimeOfDay_", studyareaname, "_", taxaLabel, ".shp"))
   # filtdf$relDensBird <- filtdf$DensBird/max(filtdf$DensBird)
   # filtdf$relAllShip <- filtdf$AllShip/max(filtdf$AllShip)
   # 
@@ -297,6 +312,17 @@ summstats <- function(taxaNames,
   #   mutate(relriskpostnorm = relriskpostnorm/max(relriskpostnorm))
   
   widedf <- filtdf %>% dplyr::select(hexID, risk, subset, taxa) %>% spread(key=subset, value=risk)
+  
+  allvsnightrisk <- data.frame(nightmorethanall_Fall = sum(widedf$Fall_All < widedf$Fall_Night, na.rm=T), 
+                               nightequaltoall_Fall= sum(widedf$Fall_All == widedf$Fall_Night, na.rm=T),
+                               nightlessthanall_Fall= sum(widedf$Fall_All > widedf$Fall_Night, na.rm=T),
+                               nightmorethanall_Summer = sum(widedf$Summer_All < widedf$Summer_Night, na.rm=T), 
+                               nightequaltoall_Summer= sum(widedf$Summer_All == widedf$Summer_Night, na.rm=T),
+                               nightlessthanall_Summer= sum(widedf$Summer_All > widedf$Summer_Night, na.rm=T))
+  allvsnightrisk$taxa <- taxaLabel
+  allvsnightrisk$studyarea <- studyareaname 
+  
+  write.csv(allvsnightrisk, paste0("../Data_Processed/AllVsNightRisk/AllVsNightRisk_",studyareaname, "_", taxaLabel, ".csv" ))
 
   summ <- data.frame(region = studyareaname, 
                      taxa = taxaLabel,
@@ -304,20 +330,20 @@ summstats <- function(taxaNames,
                      
                      totbird_summ = sum(filter(st_drop_geometry(df), df$season == "Summer") %>% dplyr::select(AllBird)), 
                      traff_summ = sum(filter(st_drop_geometry(df), df$season == "Summer") %>% dplyr::select(AllShip)), 
-                     daytraff_summ = sum(filter(st_drop_geometry(df), df$timeofday == "Day" & df$season == "Summer") %>% dplyr::select(AllShip)), 
+                     alltraff_summ = sum(filter(st_drop_geometry(df), df$timeofall == "All" & df$season == "Summer") %>% dplyr::select(AllShip)), 
                      nighttraff_summ = sum(filter(st_drop_geometry(df), df$timeofday == "Night" & df$season == "Summer") %>% dplyr::select(AllShip)), 
                      
                      totbird_fall = sum(filter(st_drop_geometry(df), df$season == "Fall") %>% dplyr::select(AllBird)), 
                      traff_fall = sum(filter(st_drop_geometry(df), df$season == "Fall") %>% dplyr::select(AllShip)), 
-                     daytraff_fall = sum(filter(st_drop_geometry(df), df$timeofday == "Day" & df$season == "Fall") %>% dplyr::select(AllShip)), 
+                     alltraff_fall = sum(filter(st_drop_geometry(df), df$timeofday == "All" & df$season == "Fall") %>% dplyr::select(AllShip)), 
                      nighttraff_fall = sum(filter(st_drop_geometry(df), df$timeofday == "Night" & df$season == "Fall") %>% dplyr::select(AllShip)) 
                      )
   
-  write.csv(summ, paste0(savefolder, "SummaryStatistics/SummaryStatistics_", studyareaname, "_", taxaLabel, ".csv"))
+  st_write(summ, paste0(savefolder, "SummaryStatistics/SummaryStatistics_", studyareaname, "_", taxaLabel, ".csv"))
   
   combos <- data.frame(id = 1:4, 
                        season = c("Summer", "Summer", "Fall", "Fall"), 
-                       tod = c("Day", "Night", "Day", "Night"))
+                       tod = c("All", "Night", "All", "Night"))
 
   basemapnew <- basemap %>% st_crop(st_buffer(st_as_sfc(st_bbox(filtdf)), 10000))
   
