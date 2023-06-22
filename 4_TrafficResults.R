@@ -97,14 +97,18 @@ ids <- data.frame(hexID = unique(birdhex$hexID))
 
 ids <- left_join(ids, dplyr::select(birdhex, hexID, AreaKM), multiple = "first")
 
-#################### Summer ####################
+#########################################################
+#################### TRAFFIC RESULTS ####################
+#########################################################
+
 # Filter out hexes without enough survey effort in both seasons
 # Select columns and months of interest 
 hexdatnew <- hexdat %>% 
   filter(hexID %in% ids$hexID) %>% 
   select(hexID, year, month, lat, date, Hrs_Al, D_Hrs_Al, N_Hrs_Al, propnight, propnighttraff, ndayspermnth) %>% 
   mutate(month = as.numeric(month)) %>% 
-  mutate(N_Hrs_Expected = Hrs_Al*propnight)
+  mutate(N_Hrs_Expected = Hrs_Al*propnight) %>% 
+  mutate(nightratio = N_Hrs_Al/N_Hrs_Expected)
 
 hexsumm <- hexdatnew %>% filter(month %in% c(6,7,8))
 hexfall <- hexdatnew %>% filter(month %in% c(9,10,11))
@@ -165,16 +169,57 @@ ggplot(hexdatnew, aes(x = propnight, y = propnighttraff)) +
   geom_abline(color="black", lwd=1) +
   stat_poly_eq(parse=T, aes(label = ..eq.label..), formula=y~x)
 
+
+#########################################################
+#################### SEABIRD RESULTS ####################
+#########################################################
 # Bird data summaries...
-birdhex %>% 
-  st_drop_geometry() %>% 
-  group_by(season, timeofday) %>% 
-  filter(timeofday == "All") %>% 
-  summarize(DensBird = mean(DensBird), 
-            nBird = sum(AllBird), survEff=sum(survEff)) %>% 
-  mutate(newDens = nBird/survEff)
+birdseason <-  birdhex %>% 
+    st_drop_geometry() %>% 
+    filter(timeofday == "All") %>% 
+    group_by(season) %>% 
+    summarize(DensBird = mean(DensBird), 
+              nBird = sum(AllBird), 
+              survEff=sum(survEff),
+              AreaKM = sum(AreaKM)) %>% 
+    mutate(newDens = nBird/survEff)
+
+# total survey effort
+sum(birdseason$nBird)
+
+sum(birdseason$survEff)
+sum(birdseason$AreaKM[birdseason$season == "Fall"])
+sum(birdseason$survEff)/sum(birdseason$AreaKM[birdseason$season == "Fall"])
+
+
+######################################################
+#################### RISK RESULTS ####################
+######################################################
+
+
+
 ############################################################################
 
+temp <- hexdatnew %>% group_by(hexID) %>% summarize(nightratio = mean(nightratio, na.rm=TRUE)) %>% mutate(nightratio_new = 1-nightratio)
+hexdatsf <- left_join(hexMask, temp) 
+hexdatsf <- hexdatsf[!is.na(hexdatsf$nightratio_new),]
+# Ratio of expected vs. observed nighttime vessel traffic
+ggplot() +
+  geom_sf(data=studyarea, fill="#8ba761", lwd=0) +
+  geom_sf(data=hexdatsf, aes(fill = nightratio_new), color="lightgray") +
+  scale_fill_gradient2() +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  # labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
+  theme_bw() +
+  theme(text = element_text(size = 18),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5), 
+        plot.caption = element_text(size = 8, hjust=0),
+        axis.text=element_blank(),
+        panel.background = element_rect(fill = "#73b2ff"),
+        panel.border =  element_rect(colour = "black"),
+        panel.grid.major = element_line(colour = "transparent")) 
 
 
 # Cells with the greatest difference in daytime and nighttime traffic 
