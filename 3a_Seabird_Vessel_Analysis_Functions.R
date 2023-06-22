@@ -313,7 +313,12 @@ summstats <- function(taxaNames,
   
   widedf <- filtdf %>% dplyr::select(hexID, risk, subset, taxa) %>% spread(key=subset, value=risk)
   
-  allvsnightrisk <- data.frame(nightmorethanall_Fall = sum(widedf$Fall_All < widedf$Fall_Night, na.rm=T), 
+  allvsnightrisk <- data.frame(numhexes = length(widedf$Fall_Night),
+                               nighthighrisk_Fall = sum(widedf$Fall_Night %in% c("high", "veryhigh")),
+                               nighthighrisk_Summer = sum(widedf$Summer_Night %in% c("high", "veryhigh")),
+                               allhighrisk_Fall = sum(widedf$Fall_All %in% c("high", "veryhigh")),
+                               allhighrisk_Summer = sum(widedf$Summer_All %in% c("high", "veryhigh")),
+                               nightmorethanall_Fall = sum(widedf$Fall_All < widedf$Fall_Night, na.rm=T), 
                                nightequaltoall_Fall= sum(widedf$Fall_All == widedf$Fall_Night, na.rm=T),
                                nightlessthanall_Fall= sum(widedf$Fall_All > widedf$Fall_Night, na.rm=T),
                                nightmorethanall_Summer = sum(widedf$Summer_All < widedf$Summer_Night, na.rm=T), 
@@ -330,7 +335,7 @@ summstats <- function(taxaNames,
                      
                      totbird_summ = sum(filter(st_drop_geometry(df), df$season == "Summer") %>% dplyr::select(AllBird)), 
                      traff_summ = sum(filter(st_drop_geometry(df), df$season == "Summer") %>% dplyr::select(AllShip)), 
-                     alltraff_summ = sum(filter(st_drop_geometry(df), df$timeofall == "All" & df$season == "Summer") %>% dplyr::select(AllShip)), 
+                     alltraff_summ = sum(filter(st_drop_geometry(df), df$timeofday == "All" & df$season == "Summer") %>% dplyr::select(AllShip)), 
                      nighttraff_summ = sum(filter(st_drop_geometry(df), df$timeofday == "Night" & df$season == "Summer") %>% dplyr::select(AllShip)), 
                      
                      totbird_fall = sum(filter(st_drop_geometry(df), df$season == "Fall") %>% dplyr::select(AllBird)), 
@@ -393,7 +398,7 @@ summstats <- function(taxaNames,
     ifelse(studyareaname == "Eastern Aleutians", 
       ggsave(filename=riskplotname, 
              plot= comboplot, 
-             width=12, height=6, units="in"), 
+             width=12, height=6, units="in"),
       ggsave(filename=riskplotname, 
              plot= comboplot, 
              width=12, height=12, units="in"))
