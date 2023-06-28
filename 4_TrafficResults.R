@@ -181,8 +181,7 @@ birdseason <-  birdhex %>%
     summarize(DensBird = mean(DensBird), 
               nBird = sum(AllBird), 
               survEff=sum(survEff),
-              AreaKM = sum(AreaKM)) %>% 
-    mutate(newDens = nBird/survEff)
+              AreaKM = sum(AreaKM))
 
 # total survey effort
 sum(birdseason$nBird)
