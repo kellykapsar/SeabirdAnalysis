@@ -131,17 +131,11 @@ names(AllAKList) <- c("Seabirds","Seaducks", "Shearwaters",
                       "Albatross", "DuckSwanGoose","Storm Petrels", "Northern Fulmars",
                       "King Eiders", "Larids", "Alcids")
 
-# AlaskaList <- list(totalBirds)
-# names(AlaskaList <- "Seabirds")
+# AlaskaList <- list(totalBirds, auklet, nofu, seaducks, shear, stormpet)
+# names(AlaskaList <- "Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels")
 
-AleutList <- list(alba)
-names(AleutList) <- c("Albatross")
-
-GOAList <- list(shear, stormpet)
-names(GOAList) <- c("Shearwaters", "Storm Petrels")
-
-BerChukList <- list(seaducks, shear, auklet)
-names(BerChukList) <- c("Seaducks", "Shearwaters", "Auklets")
+taxaList <- list(totalBirds, auklet, nofu, seaducks, shear, stormpet)
+names(taxaList) <- c("Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels")
 
 ###########################
 #### Load in Functions #### 
@@ -169,7 +163,7 @@ source("./3a_Seabird_Vessel_Analysis_Functions.R")
 #                  timeofday=timeofday)
 
 # For a list of species
-# # ALEUTIANS
+# ALEUTIANS
 # lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
 #                                                          taxaLabel= names(AllAKList[x]),
 #                                                          hexMask=hexMask,
@@ -179,7 +173,6 @@ source("./3a_Seabird_Vessel_Analysis_Functions.R")
 #                                                          mnthsnam=monthsname,
 #                                                          studyarea=uni,
 #                                                          studyareaname = "Eastern Aleutians",
-#                                                          figfolder="../Figures/Aleutians/",
 #                                                          startyr=startyear,
 #                                                          savefolder=savefolder,
 #                                                          filedir=hexList,
@@ -195,7 +188,6 @@ source("./3a_Seabird_Vessel_Analysis_Functions.R")
 #                                                          mnthsnam=monthsname,
 #                                                          studyarea=goa,
 #                                                          studyareaname = "Gulf of Alaska",
-#                                                          figfolder="../Figures/GOA/",
 #                                                          startyr=startyear,
 #                                                          savefolder=savefolder,
 #                                                          filedir=hexList,
@@ -211,7 +203,6 @@ source("./3a_Seabird_Vessel_Analysis_Functions.R")
 #                                                          mnthsnam=monthsname,
 #                                                          studyarea=berchuk,
 #                                                          studyareaname = "Northern Bering & Chukchi Seas",
-#                                                          figfolder="../Figures/NorthBeringAndChukchi/",
 #                                                          startyr=startyear,
 #                                                          savefolder=savefolder,
 #                                                          filedir=hexList,
@@ -228,7 +219,6 @@ source("./3a_Seabird_Vessel_Analysis_Functions.R")
 #                                                          startyr=startyear,
 #                                                          studyarea=npac,
 #                                                          studyareaname = "All Alaska",
-#                                                          figfolder="../Figures/AllAlaska/",
 #                                                          savefolder=savefolder,
 #                                                          filedir=hexList,
 #                                                          metric=metric,
@@ -236,26 +226,26 @@ source("./3a_Seabird_Vessel_Analysis_Functions.R")
 
 ################################# RESULTS PLOTS #################################
 # Plots for All Alaska  
-lapply(1:length(AleutList), function(x){tryCatch(summstats(taxaLabel=names(AleutList[x]),
+lapply(1:length(taxaList), function(x){tryCatch(summstats(taxaLabel=names(taxaList[x]),
                                                            studyarea=uni,
                                                            studyareaname = "Eastern Aleutians",
                                                            savefolder="../Data_Processed/",
                                                            figfolder="../Figures/Aleutians/",
                                                            basemap=basemap),error=function(e) NULL)})
 
-lapply(1:length(GOAList), function(x){tryCatch(summstats(taxaLabel=names(GOAList[x]),
+lapply(1:length(taxaList), function(x){tryCatch(summstats(taxaLabel=names(taxaList[x]),
                                                            studyarea=goa,
                                                            studyareaname = "Gulf of Alaska",
                                                            savefolder="../Data_Processed/",
                                                            figfolder="../Figures/GOA/",
                                                            basemap=basemap),error=function(e) NULL)})
-lapply(1:length(BerChukList), function(x){tryCatch(summstats(taxaLabel=names(BerChukList[x]),
+lapply(1:length(taxaList), function(x){tryCatch(summstats(taxaLabel=names(taxaList[x]),
                                                          studyarea=berchuk,
                                                          studyareaname = "Northern Bering & Chukchi Seas",
                                                          savefolder="../Data_Processed/",
                                                          figfolder="../Figures/NorthBeringAndChukchi/",
                                                          basemap=basemap),error=function(e) NULL)})
-lapply(1:length(AllAKList), function(x){tryCatch(summstats(taxaLabel=names(AllAKList[x]),
+lapply(1:length(taxaList), function(x){tryCatch(summstats(taxaLabel=names(taxaList[x]),
                                                              studyarea=npac,
                                                              studyareaname = "All Alaska",
                                                              savefolder="../Data_Processed/",
