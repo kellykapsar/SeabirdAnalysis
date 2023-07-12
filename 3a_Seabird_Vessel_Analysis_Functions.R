@@ -33,7 +33,7 @@ birdDensity <- function(loc, datobs, hex, startyr, mnths, survfilename){
   
   datobs <- datobs %>%
     # Removing off-transect from observations
-    filter(on_of_tx != "Off") %>%
+    filter(on_of_tx != "OFF") %>%
     left_join(x=datobs,y=loc,by="master_key") %>%
     filter(year > startyr) %>%
     droplevels()
@@ -299,7 +299,6 @@ summstats <- function(taxaNames,
   
   # ggplot(subset(filtdf, !is.na(filtdf$risk)), aes(fill=risk, x=subset))+
   #   geom_bar(position="dodge")
-  
   
   st_write(filtdf, paste0(savefolder, "FinalShapefiles/AllSeasonsAllTimeOfDay_", studyareaname, "_", taxaLabel, ".shp"))
   # filtdf$relDensBird <- filtdf$DensBird/max(filtdf$DensBird)
