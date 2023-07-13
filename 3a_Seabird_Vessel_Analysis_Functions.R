@@ -22,7 +22,7 @@
 birdDensity <- function(loc, datobs, hex, startyr, mnths, survfilename){
   # Drop observations that are too old or off-transect
   # Based on Kathy Kuletz's feedback, prior to 2007 is too old.
-  loc <- loc %>%
+  newloc <- loc %>%
     mutate(date = lubridate::as_datetime(local_date_time), 
            year = lubridate::year(date), 
            month = lubridate::month(date)) %>% 
@@ -31,20 +31,20 @@ birdDensity <- function(loc, datobs, hex, startyr, mnths, survfilename){
     filter(modified_survey_type != "Off Transect Observation") %>%
     droplevels()
   
-  datobs <- datobs %>%
+  newdatobs <- datobs %>%
     # Removing off-transect from observations
-    filter(on_of_tx != "OFF") %>%
-    left_join(x=datobs,y=loc,by="master_key") %>%
+    filter(on_off_tx == "ON") %>%
+    left_join(.,y=newloc,by="master_key") %>%
     filter(year > startyr) %>%
     droplevels()
   
   # Identify unique 4-digit codes for each bird spp 
-  birdNames <- unique(datobs$species_code)
+  birdNames <- unique(newdatobs$species_code)
   
   # convert to SF and transform to Alaska Albers (epsg 3338), otherwise hexagons over -180:180 get warped
-  datSF <- st_as_sf(datobs,coords = c("longitude","latitude"),crs=4326) %>%
+  datSF <- st_as_sf(newdatobs,coords = c("longitude","latitude"),crs=4326) %>%
     st_transform(crs=3338)
-  locSF <- st_as_sf(loc,coords = c("longitude","latitude"),crs=4326) %>%
+  locSF <- st_as_sf(newloc,coords = c("longitude","latitude"),crs=4326) %>%
     st_transform(crs=3338)
   
   # Set up one df for bird obs and another df for survey effort
@@ -67,10 +67,13 @@ birdDensity <- function(loc, datobs, hex, startyr, mnths, survfilename){
   # Iterate through each spp and calculate number of observations per hex
   for (i in 1:length(birdNames)){
     obsIn2 <- obsIn[obsIn$species_code==birdNames[i],]
-    sppNout[[i]] <- obsIn2 %>%
-      group_by(hexID) %>%
-      summarize(birdN = sum(as.numeric(number))) %>%
+     temp <- obsIn2 %>%
+      group_by(hexID, master_key) %>%
+      summarize(nBirds = sum(number), sample_area = first(sample_area)) %>%
       as.data.frame()
+    sppNout[[i]] <- temp %>% 
+      group_by(hexID) %>% 
+      summarize(birdDen = sum(nBirds)/sum(sample_area))
     names(sppNout[[i]]) <- c("hexID",birdNames[i])
   }
   
@@ -181,46 +184,46 @@ birdHexesByEffort <- function(dataobs,
   finaldfname <-paste0(savefolder,"Region_Taxa_Season_TimeOfDay_DFs/FinalDF_",studyareaname,"_",taxaLabel,"_",monthsname,"_", timeofday,".shp")
   
   if(!file.exists(finaldfname)){
-    
-    # Isolate hexes within study area     
-    birddf <- birddf[st_contains(studyarea, birddf, sparse = FALSE),] 
-    
+
+    # Isolate hexes within study area
+    birddf <- birddf[st_contains(studyarea, birddf, sparse = FALSE),]
+
     ## Bird Risk Calculations
     # Select only hexes with sufficient survey effort
     birdGuild <- birddf %>%
       filter(as.numeric(survEff)>c(effortThreshold*as.numeric(AreaKM)))
-    
-    # Isolate taxa of interest and calculate total number of observations 
+
+    # Isolate taxa of interest and calculate total number of observations
     birdGuildAll <- birdGuild[,c(colnames(birdGuild) %in% taxaNames)] %>%
       st_drop_geometry()
     birdGuild$AllBird <- rowSums(birdGuildAll)
-    
+
     # Stack just the relevant guilds, remove extraneous columns
     birdStacked <- birdGuild %>%
       select(hexID,AllBird,survEff,AreaKM)
-    
-    # Calculate SD categories for each hex's effort-weighted seabird observations 
+
+    # Calculate SD categories for each hex's effort-weighted seabird observations
     birdFinal <- birdStacked %>%
-      mutate(QuantBird = ecdf(AllBird/survEff)(AllBird/survEff))
-    
+      mutate(QuantBird = ecdf(AllBird)(AllBird))
+
     # Calculate effort-weighted densities of seabirds (# birds per square km of surveyed area)
-    birdFinal$DensBird <- c(birdFinal$AllBird/birdFinal$survEff)
-    
+    birdFinal$DensBird <- c(birdFinal$AllBird)
+
     # Calculate effort-weighted classes for the number of observations
-    birdFinal$ClassBird <- ifelse(birdFinal$AllBird == 0, 0, 
-                            ifelse(c(birdFinal$AllBird/birdFinal$survEff)<mean(c(birdFinal$AllBird/birdFinal$survEff)),1,
-                             ifelse(c(birdFinal$AllBird/birdFinal$survEff)>=c(mean(c(birdFinal$AllBird/birdFinal$survEff))+sd(c(birdFinal$AllBird/birdFinal$survEff))),3,2)))
-    
+    birdFinal$ClassBird <- ifelse(birdFinal$AllBird == 0, 0,
+                            ifelse(birdFinal$AllBird<mean(birdFinal$AllBird),1,
+                             ifelse(birdFinal$AllBird>=c(mean(birdFinal$AllBird)+sd(birdFinal$AllBird)),3,2)))
+
     # Create column to specify taxa of interest
     birdFinal$taxa <- taxaLabel
-    
+
     # Select traffic data columns of interest
     traffFinal <- traffdf %>% dplyr::select(hexID, AllShip)
-    
-    # Join to vessel traffic data 
+
+    # Join to vessel traffic data
     df <- birdFinal %>%
       left_join(y=traffFinal,by="hexID")
-    
+
     ## Vessel Risk Calculations
     # Calculate SD categories for each hex's vessel activity
     df$QuantShip <- ecdf(df$AllShip)(df$AllShip)
@@ -228,7 +231,7 @@ birdHexesByEffort <- function(dataobs,
     df$ClassShip <- ifelse(df$AllShip<mean(df$AllShip),1,
                                 ifelse(df$AllShip>=c(mean(df$AllShip)+sd(df$AllShip)),3,2))
 
-    # Evaluate risk levels 
+    # Evaluate risk levels
     df$risk <- ifelse(df$ClassBird == 1 & df$ClassShip == 1, "low",
                 ifelse(df$ClassBird == 1 & df$ClassShip == 2 | df$ClassBird == 1 & df$ClassShip == 3, "mediumSHIP",
                 ifelse(df$ClassBird == 2 & df$ClassShip == 1 | df$ClassBird == 3 & df$ClassShip == 1, "mediumBIRD",
@@ -238,11 +241,11 @@ birdHexesByEffort <- function(dataobs,
 
 
     df$risk <- factor(df$risk,  c("low","mediumSHIP","mediumBIRD","high","veryhigh"))
-    
+
     df$season <- mnthsnam
     df$timeofday <- timeofday
-    
-    # Save data 
+
+    # Save data
     st_write(df, finaldfname)
   }
 }
@@ -278,8 +281,8 @@ summstats <- function(taxaNames,
     temp <- subdf[subdf$timeofday == timeofday[i],]
 
     temp$ClassBird <- ifelse(temp$AllBird == 0, 0, 
-                        ifelse(c(temp$AllBird/temp$survEff)<mean(c(temp$AllBird/temp$survEff)),1,
-                        ifelse(c(temp$AllBird/temp$survEff)>=c(mean(c(temp$AllBird/temp$survEff))+sd(c(temp$AllBird/temp$survEff))),3,2)))
+                        ifelse(temp$AllBird<mean(temp$AllBird),1,
+                        ifelse(temp$AllBird>=c(mean(temp$AllBird)+sd(temp$AllBird)),3,2)))
     
     temp$ClassShip <- ifelse(temp$AllShip<mean(temp$AllShip),1,
                                ifelse(temp$AllShip>=c(mean(temp$AllShip)+sd(temp$AllShip)),3,2))
@@ -341,14 +344,12 @@ summstats <- function(taxaNames,
                      densbird_mean_summ = mean(summfiltdf$DensBird[summfiltdf$timeofday == "All"]), 
                      densbird_median_summ = median(summfiltdf$DensBird[summfiltdf$timeofday == "All"]), 
                      densbird_sd_summ = sd(summfiltdf$DensBird[summfiltdf$timeofday == "All"]),
-                     birdcount_summ =  sum(summfiltdf$AllBird[summfiltdf$timeofday == "All"]),
                      alltraff_summ = sum(summfiltdf$AllShip[summfiltdf$timeofday == "All"]),
                      nighttraff_summ =  sum(summfiltdf$AllShip[summfiltdf$timeofday == "Night"]),
                      
                      densbird_mean_fall = mean(fallfiltdf$DensBird[fallfiltdf$timeofday == "All"]), 
                      densbird_median_fall = median(fallfiltdf$DensBird[fallfiltdf$timeofday == "All"]), 
                      densbird_sd_fall = sd(fallfiltdf$DensBird[fallfiltdf$timeofday == "All"]),
-                     birdcount_fall = sum(fallfiltdf$AllBird[fallfiltdf$timeofday == "All"]), 
                      alltraff_fall = sum(fallfiltdf$AllShip[fallfiltdf$timeofday == "All"]), 
                      nighttraff_fall = sum(fallfiltdf$AllShip[fallfiltdf$timeofday == "Night"])
                      )
