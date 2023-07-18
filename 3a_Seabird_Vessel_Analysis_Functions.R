@@ -65,17 +65,25 @@ birdDensity <- function(loc, datobs, hex, startyr, mnths, survfilename){
   sppNout <- as.list(NA)
   
   # Iterate through each spp and calculate number of observations per hex
+  # for (i in 1:length(birdNames)){
+  #   obsIn2 <- obsIn[obsIn$species_code==birdNames[i],]
+  #    temp <- obsIn2 %>%
+  #     group_by(hexID, master_key) %>%
+  #     summarize(nBirds = sum(number), sample_area = first(sample_area)) %>%
+  #     as.data.frame()
+  #   sppNout[[i]] <- temp %>% 
+  #     group_by(hexID) %>% 
+  #     summarize(birdDen = sum(nBirds)/sum(sample_area))
+  #   names(sppNout[[i]]) <- c("hexID",birdNames[i])
+  # }
   for (i in 1:length(birdNames)){
     obsIn2 <- obsIn[obsIn$species_code==birdNames[i],]
-     temp <- obsIn2 %>%
-      group_by(hexID, master_key) %>%
-      summarize(nBirds = sum(number), sample_area = first(sample_area)) %>%
-      as.data.frame()
-    sppNout[[i]] <- temp %>% 
+    sppNout[[i]] <- obsIn2 %>% 
       group_by(hexID) %>% 
-      summarize(birdDen = sum(nBirds)/sum(sample_area))
+      summarize(AllBird = sum(number))
     names(sppNout[[i]]) <- c("hexID",birdNames[i])
   }
+  
   
   for (j in 1:length(birdNames)){
     res <- left_join(res,sppNout[[j]],by="hexID")
@@ -202,17 +210,19 @@ birdHexesByEffort <- function(dataobs,
     birdStacked <- birdGuild %>%
       select(hexID,AllBird,survEff,AreaKM)
 
-    # Calculate SD categories for each hex's effort-weighted seabird observations
-    birdFinal <- birdStacked %>%
-      mutate(QuantBird = ecdf(AllBird)(AllBird))
-
     # Calculate effort-weighted densities of seabirds (# birds per square km of surveyed area)
-    birdFinal$DensBird <- c(birdFinal$AllBird)
+    birdFinal <- birdStacked %>% mutate(DensBird = AllBird/survEff)
+    
+    # Calculate SD categories for each hex's effort-weighted seabird observations
+    birdFinal <- birdFinal %>%
+      mutate(QuantBird = ecdf(DensBird)(DensBird))
 
     # Calculate effort-weighted classes for the number of observations
     birdFinal$ClassBird <- ifelse(birdFinal$AllBird == 0, 0,
-                            ifelse(birdFinal$AllBird<mean(birdFinal$AllBird),1,
-                             ifelse(birdFinal$AllBird>=c(mean(birdFinal$AllBird)+sd(birdFinal$AllBird)),3,2)))
+                            ifelse(birdFinal$DensBird<mean(birdFinal$DensBird),1,
+                             ifelse(birdFinal$DensBird>=c(mean(birdFinal$DensBird)+sd(birdFinal$DensBird)),3,2)))
+    # Standardize values
+    # birdFinal$DensBird_rescale <- birdFinal$DensBird/sd(birdFinal$DensBird)
 
     # Create column to specify taxa of interest
     birdFinal$taxa <- taxaLabel
@@ -231,6 +241,9 @@ birdHexesByEffort <- function(dataobs,
     df$ClassShip <- ifelse(df$AllShip<mean(df$AllShip),1,
                                 ifelse(df$AllShip>=c(mean(df$AllShip)+sd(df$AllShip)),3,2))
 
+    # Standardize values
+    # df$AllShip_rescale <- df$AllShip/sd(df$AllShip)
+    
     # Evaluate risk levels
     df$risk <- ifelse(df$ClassBird == 1 & df$ClassShip == 1, "low",
                 ifelse(df$ClassBird == 1 & df$ClassShip == 2 | df$ClassBird == 1 & df$ClassShip == 3, "mediumSHIP",
@@ -241,6 +254,8 @@ birdHexesByEffort <- function(dataobs,
 
 
     df$risk <- factor(df$risk,  c("low","mediumSHIP","mediumBIRD","high","veryhigh"))
+    
+    # df$risk_cont <- df$AllShip_rescale/df$DensBird_rescale
 
     df$season <- mnthsnam
     df$timeofday <- timeofday
@@ -281,38 +296,57 @@ summstats <- function(taxaNames,
     temp <- subdf[subdf$timeofday == timeofday[i],]
 
     temp$ClassBird <- ifelse(temp$AllBird == 0, 0, 
-                        ifelse(temp$AllBird<mean(temp$AllBird),1,
-                        ifelse(temp$AllBird>=c(mean(temp$AllBird)+sd(temp$AllBird)),3,2)))
-    
+                      ifelse(c(temp$AllBird/temp$survEff)<mean(c(temp$AllBird/temp$survEff)),1,
+                      ifelse(c(temp$AllBird/temp$survEff)>=c(mean(c(temp$AllBird/temp$survEff))+sd(c(temp$AllBird/temp$survEff))),3,2)))
+
     temp$ClassShip <- ifelse(temp$AllShip<mean(temp$AllShip),1,
                                ifelse(temp$AllShip>=c(mean(temp$AllShip)+sd(temp$AllShip)),3,2))
     
     # Evaluate risk levels 
-    temp$risk <- ifelse(temp$ClassBird == 1 & temp$ClassShip == 1, "low",
+    temp$riskcat <- ifelse(temp$ClassBird == 1 & temp$ClassShip == 1, "low",
                     ifelse(temp$ClassBird == 1 & temp$ClassShip == 2 | temp$ClassBird == 1 & temp$ClassShip == 3, "mediumSHIP",
                     ifelse(temp$ClassBird == 2 & temp$ClassShip == 1 | temp$ClassBird == 3 & temp$ClassShip == 1, "mediumBIRD",
                     ifelse(temp$ClassBird == 3 & temp$ClassShip == 2 | temp$ClassBird == 2 & temp$ClassShip == 3, "high",
                     ifelse(temp$ClassBird == 2 & temp$ClassShip == 2, "high",
                     ifelse(temp$ClassBird == 3 & temp$ClassShip == 3, "veryhigh", NA))))))
     
+    # Evaluate continuous risk 
+    temp$QuantBird <- ecdf(temp$DensBird)(temp$DensBird)
+    # BirdVal99 <- min(temp$DensBird[which(temp$QuantBird > 0.99)])
+    # temp$DensBird_rescale1 <- ifelse(temp$QuantBird > 0.99, BirdVal99, temp$DensBird)
+    
+    temp$QuantShip <- ecdf(temp$AllShip)(temp$AllShip)
+    # ShipVal99 <- min(temp$AllShip[which(temp$QuantShip > 0.99)])
+    # temp$AllShip_rescale1 <-  ifelse(temp$QuantShip > 0.99, ShipVal99, temp$AllShip)
+    
+    temp$DensBird_rescale <- log(temp$DensBird+1)
+    temp$AllShip_rescale <- log(temp$AllShip+1)
+
+    # temp$DensBird_rescale3 <- rescale(log(temp$DensBird+1), to = c(0,10))
+    # temp$AllShip_rescale3 <- rescale(log(temp$AllShip+1), to = c(0, 10))
+    
+    # temp$riskcont1 <- temp$DensBird_rescale1*temp$AllShip_rescale1
+    temp$riskcont <- temp$DensBird_rescale*temp$AllShip_rescale
+    # temp$riskcont3 <- temp$DensBird_rescale3*temp$AllShip_rescale3
+    
     filtdf <- rbind(filtdf, temp)
   }
   
-  filtdf$risk <- ordered(filtdf$risk,  levels=c("low","mediumSHIP","mediumBIRD","high","veryhigh"))
+  filtdf$riskcat <- ordered(filtdf$riskcat,  levels=c("low","mediumSHIP","mediumBIRD","high","veryhigh"))
   
-  # ggplot(subset(filtdf, !is.na(filtdf$risk)), aes(fill=risk, x=subset))+
+  # ggplot(subset(filtdf, !is.na(filtdf$riskcat)), aes(fill=riskcat, x=subset))+
   #   geom_bar(position="dodge")
   
   st_write(filtdf, paste0(savefolder, "FinalShapefiles/AllSeasonsAllTimeOfDay_", studyareaname, "_", taxaLabel, ".shp"))
   # filtdf$relDensBird <- filtdf$DensBird/max(filtdf$DensBird)
   # filtdf$relAllShip <- filtdf$AllShip/max(filtdf$AllShip)
   # 
-  # filtdf$relriskprenorm <- filtdf$relDensBird*filtdf$relAllShip
+  # filtdf$relriskcatprenorm <- filtdf$relDensBird*filtdf$relAllShip
   # filtdf <- filtdf %>% 
-  #   mutate(relriskpostnorm = filtdf$DensBird*filtdf$AllShip) %>% 
-  #   mutate(relriskpostnorm = relriskpostnorm/max(relriskpostnorm))
+  #   mutate(relriskcatpostnorm = filtdf$DensBird*filtdf$AllShip) %>% 
+  #   mutate(relriskcatpostnorm = relriskpostnorm/max(relriskpostnorm))
   
-  widedf <- filtdf %>% dplyr::select(hexID, risk, subset, taxa) %>% spread(key=subset, value=risk)
+  widedf <- filtdf %>% dplyr::select(hexID, riskcat, subset, taxa) %>% spread(key=subset, value=riskcat)
   
   allvsnightrisk <- data.frame(numhexes = length(widedf$Fall_Night),
                                nighthighrisk_Fall = sum(widedf$Fall_Night %in% c("high", "veryhigh")),
@@ -364,122 +398,133 @@ summstats <- function(taxaNames,
   
   box <- st_as_sf(name="boundary", st_buffer(st_as_sfc(st_bbox(filtdf)), 10000))
   
-  ################################################# 
-  ##################### Risk plot: All Traffic #################
-  ################################################# 
-  riskplotallname <- paste0(figfolder, "RiskCombos_All_", taxaLabel, "_", studyareaname, ".png")
+  
+  # Get color scale that works well for skewed data 
+  cols <- c(colorRampPalette(c("#e7f0fa", "#c9e2f6", "#95cbee", "#0099dc", "#4ab04a", "#ffd73e"))(25),
+            colorRampPalette(c("#eec73a", "#e29421", "#e29421", "#f05336","#ce472e"), bias=2)(25))
+  
+  ######################################################### 
+  ##################### Risk Plot: Continuous #################
+  ######################################################### 
+  tod <- c("All", "Night")
+  season <- c("Summer","Fall")
   
   for(i in 1:2){
-    dfsub <- filtdf %>% filter(season == combos$season[i] & timeofday == combos$tod[i])
-    dfsub$risk <- factor(dfsub$risk, 
-                         levels = c("low", "mediumBIRD", "mediumSHIP", "high", "veryhigh"))
-    plt <- ggplot() +
-      geom_sf(data=box, fill=NA, color=NA,lwd=0) +      
-      geom_sf(data=basemapnew, fill="lightgray",lwd=0) +
-      geom_sf(data=dfsub,aes(fill = risk), color="darkgray") +
-      scale_fill_manual(values = c("low" = "#73b2ff",
-                                   "mediumBIRD" = "#90ee90",
-                                   "mediumSHIP" = "#14ff96",
-                                   "high" = "#f7f570",
-                                   "veryhigh" = "#e31a1c"),
-                        na.value = "white",
-                        name="Risk", 
-                        drop=F,
-                        labels = c("Low", "Moderate (bird)", "Moderate (ship)", "High", "Very High")) +
-      xlab("") +
-      ylab("") +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
-      theme_bw() +
-      theme(text = element_text(size = 18),
-            plot.title = element_text(hjust = 0.5),
-            plot.subtitle = element_text(hjust = 0.5),
-            plot.caption = element_text(size = 8, hjust=0),
-            axis.ticks = element_blank(),
-            axis.text=element_blank(),
-            panel.border =  element_rect(colour = "black"),
-            panel.grid.major = element_line(colour = "transparent"), 
-            panel.background = element_rect(fill = "white")) +
-      ggtitle(paste0(dfsub$season[1]))
-    assign(paste0("p", i), plt)
-  }
-  comboplot <- ggarrange(p1, p2, ncol=2, nrow=1, common.legend=TRUE, legend = "bottom")
-  comboplot <- annotate_figure(comboplot, top = text_grob(dfsub$taxa[1], face = "bold", size = 30)) + 
-    theme(panel.background = element_rect(fill = "white"))
-  
+    dfnew <- filtdf %>% filter(timeofday == tod[i])
+    riskplotcontname <- paste0(figfolder, "Risk_Continuous_", tod[i],"_",taxaLabel, "_", studyareaname, ".png")
+    
+    for(j in 1:length(unique(combos$season))){
+      dfsub <- filtdf %>% filter(season == unique(combos$season)[j])
+      plt <- ggplot() +
+        geom_sf(data=box, fill=NA, color=NA,lwd=0) +   
+        geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
+        geom_sf(data=filter(dfsub, riskcont == 0), color="darkgray", fill=NA) +
+        geom_sf(data=filter(dfsub, riskcont != 0),aes(fill = riskcont), color="darkgray") +
+        scale_fill_gradientn(colours=cols, labels=scales::label_number(),name="Risk Index", na.value="white") +
+        # scale_fill_steps(trans="log",low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::label_number(), 
+        #                  name="Density \n(Ind'ls/km\u00b2)", guide = guide_coloursteps(show.limits = TRUE)) + 
+        scale_x_continuous(expand = c(0, 0)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        # labs(caption = paste0("*Empty hexes were surveyed, but no ", taxaLabel, " were sighted during study period.")) + 
+        guides(fill = guide_colourbar(barwidth = 25, 
+                                      barheight = 1, 
+                                      title.hjust = 0.5,
+                                      ticks.colour="black", 
+                                      frame.colour = "black", 
+                                      ticks.linewidth = 0.75)) +
+        theme_bw() +
+        theme(text = element_text(size = 18),
+              axis.ticks=element_blank(), 
+              plot.title = element_text(hjust = 0.5),
+              plot.subtitle = element_text(hjust = 0.5), 
+              plot.caption = element_text(size = 8, hjust=0),
+              plot.margin = margin(t=0.5, r=0.5, b=0.5, l=0.5, unit="cm"), 
+              axis.text=element_blank(),
+              # panel.background = element_rect(fill = "#73b2ff"),
+              panel.border =  element_rect(colour = "black"),
+              panel.grid.major = element_line(colour = "transparent")) +
+        ggtitle(unique(combos$season)[j])
+      assign(paste0("b", j), plt)
+    }
+    comboplot <- ggarrange(b1, b2, ncol=2, nrow=1, common.legend=TRUE, legend = "bottom")
+    
+    comboplot <- annotate_figure(comboplot, top = text_grob(dfsub$taxa[1], face = "bold", size = 30)) + 
+      theme(panel.background = element_rect(fill = "white"))
+    
+    
     # Save figure
-  if(!file.exists(riskplotallname)){
-    ifelse(studyareaname == "Eastern Aleutians", 
-      ggsave(filename=riskplotallname, 
-             plot= comboplot, 
-             width=12, height=4, units="in"),
-      ggsave(filename=riskplotallname, 
-             plot= comboplot, 
-             width=12, height=6, units="in"))
+    if(!file.exists(riskplotcontname)){
+      ifelse(studyareaname == "Eastern Aleutians",
+             ggsave(filename=riskplotcontname,
+                    plot= comboplot,
+                    width=12, height=4, units="in"),
+             ggsave(filename=riskplotcontname,
+                    plot= comboplot,
+                    width=12, height=6, units="in"))
+    }
   }
   
   ################################################# 
-  ##################### Risk plot: Night Traffic #################
+  ##################### Risk plot: Categorical #################
   ################################################# 
-  riskplotnightname <- paste0(figfolder, "RiskCombos_Night_", taxaLabel, "_", studyareaname, ".png")
-  
-  for(i in 3:4){
-    dfsub <- filtdf %>% filter(season == combos$season[i] & timeofday == combos$tod[i])
-    dfsub$risk <- factor(dfsub$risk, 
-                         levels = c("low", "mediumBIRD", "mediumSHIP", "high", "veryhigh"))
-    plt <- ggplot() +
-      geom_sf(data=box, fill=NA, color=NA,lwd=0) +      
-      geom_sf(data=basemapnew, fill="lightgray",lwd=0) +
-      geom_sf(data=dfsub,aes(fill = risk), color="darkgray") +
-      scale_fill_manual(values = c("low" = "#73b2ff",
-                                   "mediumBIRD" = "#90ee90",
-                                   "mediumSHIP" = "#14ff96",
-                                   "high" = "#f7f570",
-                                   "veryhigh" = "#e31a1c"),
-                        na.value = "white",
-                        name="Risk", 
-                        drop=F,
-                        labels = c("Low", "Moderate (bird)", "Moderate (ship)", "High", "Very High")) +
-      xlab("") +
-      ylab("") +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
-      theme_bw() +
-      theme(text = element_text(size = 18),
-            plot.title = element_text(hjust = 0.5),
-            plot.subtitle = element_text(hjust = 0.5),
-            plot.caption = element_text(size = 8, hjust=0),
-            axis.ticks = element_blank(),
-            axis.text=element_blank(),
-            panel.border =  element_rect(colour = "black"),
-            panel.grid.major = element_line(colour = "transparent"), 
-            panel.background = element_rect(fill = "white")) +
-      ggtitle(paste0(dfsub$season[1]))
-    assign(paste0("p", i), plt)
-  }
-  comboplot <- ggarrange(p3, p4, ncol=2, nrow=1, common.legend=TRUE, legend = "bottom")
-  comboplot <- annotate_figure(comboplot, top = text_grob(dfsub$taxa[1], face = "bold", size = 30)) + 
-    theme(panel.background = element_rect(fill = "white"))
-  
-  # Save figure
-  if(!file.exists(riskplotnightname)){
-    ifelse(studyareaname == "Eastern Aleutians", 
-           ggsave(filename=riskplotnightname, 
-                  plot= comboplot, 
-                  width=12, height=4, units="in"),
-           ggsave(filename=riskplotnightname, 
-                  plot= comboplot, 
-                  width=12, height=6, units="in"))
+
+  for(i in 1:2){
+    dfnew <- filtdf %>% filter(timeofday == tod[i])
+    riskplotallname <- paste0(figfolder, "Risk_Categorical_", tod[i],"_",taxaLabel, "_", studyareaname, ".png")
+    for(j in 1:2){
+      dfsub <- dfnew %>% filter(season == season[j])
+      dfsub$riskcat <- factor(dfsub$riskcat, 
+                           levels = c("low", "mediumBIRD", "mediumSHIP", "high", "veryhigh"))
+      plt <- ggplot() +
+        geom_sf(data=box, fill=NA, color=NA,lwd=0) +      
+        geom_sf(data=basemapnew, fill="lightgray",lwd=0) +
+        geom_sf(data=dfsub,aes(fill = riskcat), color="darkgray") +
+        scale_fill_manual(values = c("low" = "#73b2ff",
+                                     "mediumBIRD" = "#90ee90",
+                                     "mediumSHIP" = "#14ff96",
+                                     "high" = "#f7f570",
+                                     "veryhigh" = "#e31a1c"),
+                          na.value = "white",
+                          name="Risk", 
+                          drop=F,
+                          labels = c("Low", "Moderate (bird)", "Moderate (ship)", "High", "Very High")) +
+        xlab("") +
+        ylab("") +
+        scale_x_continuous(expand = c(0, 0)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        theme_bw() +
+        theme(text = element_text(size = 18),
+              plot.title = element_text(hjust = 0.5),
+              plot.subtitle = element_text(hjust = 0.5),
+              plot.caption = element_text(size = 8, hjust=0),
+              axis.ticks = element_blank(),
+              axis.text=element_blank(),
+              panel.border =  element_rect(colour = "black"),
+              panel.grid.major = element_line(colour = "transparent"), 
+              panel.background = element_rect(fill = "white")) +
+        ggtitle(paste0(dfsub$season[1]))
+      assign(paste0("p", j), plt)
+    }
+    comboplot <- ggarrange(p1, p2, ncol=2, nrow=1, common.legend=TRUE, legend = "bottom")
+    comboplot <- annotate_figure(comboplot, top = text_grob(dfsub$taxa[1], face = "bold", size = 30)) + 
+      theme(panel.background = element_rect(fill = "white"))
+    
+      # Save figure
+    if(!file.exists(riskplotallname)){
+      ifelse(studyareaname == "Eastern Aleutians",
+        ggsave(filename=riskplotallname,
+               plot= comboplot,
+               width=12, height=4, units="in"),
+        ggsave(filename=riskplotallname,
+               plot= comboplot,
+               width=12, height=6, units="in"))
+    }
   }
 
   #################################################### 
   ##################### Traffic plot #################
   #################################################### 
   traffplotname <- paste0(figfolder,"TrafficCombos_", studyareaname,".png")
-  
-  # Get color scale that works well for skewed data 
-  cols <- c(colorRampPalette(c("#e7f0fa", "#c9e2f6", "#95cbee", "#0099dc", "#4ab04a", "#ffd73e"))(25),
-            colorRampPalette(c("#eec73a", "#e29421", "#e29421", "#f05336","#ce472e"), bias=2)(25))
   
   if(studyareaname %in% c("All Alaska", "Gulf of Alaska", "Eastern Aleutians")){
     br <- c(0,10,100, 1000, 10000, 100000, 100000)
