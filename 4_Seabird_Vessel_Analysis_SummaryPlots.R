@@ -2,6 +2,7 @@
 
 library(sf)
 library(tidyverse)
+library(ggpubr)
 
 # Master summary statistics csv file 
 filelist <- list.files("../Data_Processed/SummaryStatistics/", pattern=".csv", full.names=T)
@@ -40,14 +41,14 @@ for(i in 1:length(loclist)){
   
   test <- strsplit(h$subset,split = "_")
   h$season <- sapply(test, "[[", 3)
-  h$timeofday <-  sapply(test, "[[", 4)
+  h$timefdy <-  sapply(test, "[[", 4)
   
   h$taxa <- factor(h$taxa, 
-                   levels = c("Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels"),
-                   labels = c("All Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels"))
+                   levels = c("Total Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels"),
+                   labels = c("Total Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels"))
   h$season <- factor(h$season, levels = c("summ", "fall"), labels = c("Summer", "Fall"))
   
-  p <- ggplot(h, aes(x=season, y=riskpct, fill=timeofday)) +
+  p <- ggplot(h, aes(x=season, y=riskpct, fill=timefdy)) +
     geom_bar(position="dodge", stat="identity") +
     scale_fill_manual(values=c("all" = "#fee227", 
                                "night" = "#191970"), 
@@ -62,6 +63,7 @@ for(i in 1:length(loclist)){
   p
   ggsave(filename = paste0("../Figures/RiskBarGraph_", loclist[i],".png"),
          plot = p, width=16, height=8, units="in")
+
   ############################################
   
   filelist <- list.files("../Data_Processed/FinalShapefiles/", pattern=loclist[i], full.names=T)
@@ -72,7 +74,7 @@ for(i in 1:length(loclist)){
   files <- lapply(filelist, st_read)
   hexes <- do.call(rbind, files)
   
-  test <- hexes %>% st_drop_geometry() %>% filter(risk %in% c("high", "veryhigh")) %>% group_by(hexID, season, timeofday) %>% summarize(n=length(unique(taxa)))
+  test <- hexes %>% st_drop_geometry() %>% filter(riskcat %in% c("high", "veryhigh")) %>% group_by(hexID, season, timefdy) %>% summarize(n=length(unique(taxa)))
   
   hexMaskCrop <- hexMask[hexMask$hexID %in% unique(hexes$hexID),]
   
@@ -90,7 +92,7 @@ for(i in 1:length(loclist)){
   taxariskcounts <- paste0("../Figures/RiskCounts_All_", loclist[i], ".png")
   
   for(j in 1:2){
-    t <- test %>% filter(season == combos$season[j] & timeofday == combos$tod[j])
+    t <- test %>% filter(season == combos$season[j] & timefdy == combos$tod[j])
     t$n <- factor(t$n)
     tnew <- left_join(hexMaskCrop, t, by=c("hexID"))
     
@@ -98,10 +100,10 @@ for(i in 1:length(loclist)){
       geom_sf(data=box, fill=NA, color=NA,lwd=0) +      
       geom_sf(data=basemapnew, fill="lightgray",lwd=0) +
       geom_sf(data=tnew,aes(fill = n), color="darkgray") +
-      scale_fill_manual(values = c("1" = "#ec8282",
-                                   "2" = "#c37b87",
-                                   "3" = "#826f8d",
-                                   "4" = "#446382"),
+      scale_fill_manual(values = c("1" = "#9bdbbd",
+                                   "2" = "#1cbcae",
+                                   "3" = "#005d9d",
+                                   "4" = "#281863"),
                         na.value = "white",
                         name="Number of Taxa", 
                         drop=F) +
@@ -143,7 +145,7 @@ for(i in 1:length(loclist)){
   taxanightriskcounts <- paste0("../Figures/RiskCounts_Night_", loclist[i], ".png")
   
   for(k in 3:4){
-    t <- test %>% filter(season == combos$season[k] & timeofday == combos$tod[k])
+    t <- test %>% filter(season == combos$season[k] & timefdy == combos$tod[k])
     t$n <- factor(t$n)
     tnew <- left_join(hexMaskCrop, t, by=c("hexID"))
     
@@ -151,10 +153,10 @@ for(i in 1:length(loclist)){
       geom_sf(data=box, fill=NA, color=NA,lwd=0) +      
       geom_sf(data=basemapnew, fill="lightgray",lwd=0) +
       geom_sf(data=tnew,aes(fill = n), color="darkgray") +
-      scale_fill_manual(values = c("1" = "#ec8282",
-                                   "2" = "#c37b87",
-                                   "3" = "#826f8d",
-                                   "4" = "#446382"),
+      scale_fill_manual(values = c("1" = "#9bdbbd",
+                                   "2" = "#1cbcae",
+                                   "3" = "#005d9d",
+                                   "4" = "#281863"),
                         na.value = "white",
                         name="Number of Taxa", 
                         drop=F) +
@@ -192,7 +194,7 @@ for(i in 1:length(loclist)){
   
 }
 
-# hall <- h %>% filter(timeofday == "all")
+# hall <- h %>% filter(timefdy == "all")
 # 
 # p <- ggplot(hall, aes(x=taxa, y=riskpct, fill=season)) +
 #   geom_bar(position="dodge", stat="identity") +
@@ -206,27 +208,27 @@ for(i in 1:length(loclist)){
 
 ##################
 # Log bird density vs. log vessel traffic - Risk Categories
-akall <- st_read("../Data_Processed/FinalShapefiles/AllSeasonsAllTimeOfDay_All Alaska_Seabirds.shp") %>% st_drop_geometry()
-akallsumm <- akall %>% filter(subset == "Summer_All")
-akallfall <- akall %>% filter(subset == "Fall_All")
-
-akallsumm$risk <- factor(akallsumm$risk, levels = c("low", "medium", "high", "veryhigh"), labels = c("Low", "Medium", "High", "Very High"))
-akallfall$risk <- factor(akallfall$risk, levels = c("low", "medium", "high", "veryhigh"), labels = c("Low", "Medium", "High", "Very High"))
-
-risk_pal <- c("#73b2ff", "#55fe01", "#ffff01", "#e31a1c")
-names(risk_pal) <- levels(akallsumm$risk)
-
-ggplot(akallsumm, aes(x = DensBird, y = AllShip)) +
-  geom_point(aes(color=risk)) +
-  scale_color_manual(values = risk_pal) +
-  scale_x_continuous(trans=scales::pseudo_log_trans(base = 10)) +
-  scale_y_continuous(trans=scales::pseudo_log_trans(base = 10)) +
-  theme(text = element_text(size=30))
-
-ggplot(akallfall, aes(x = DensBird, y = AllShip)) +
-  geom_point(aes(color=risk)) +
-  scale_color_manual(values = risk_pal) +
-  scale_x_continuous(trans=scales::pseudo_log_trans(base = 10)) +
-  scale_y_continuous(trans=scales::pseudo_log_trans(base = 10)) +
-  theme(text = element_text(size=30))
-
+# akall <- st_read("../Data_Processed/FinalShapefiles/AllSeasonsAlltimefdy_All Alaska_Seabirds.shp") %>% st_drop_geometry()
+# akallsumm <- akall %>% filter(subset == "Summer_All")
+# akallfall <- akall %>% filter(subset == "Fall_All")
+# 
+# akallsumm$risk <- factor(akallsumm$risk, levels = c("low", "medium", "high", "veryhigh"), labels = c("Low", "Medium", "High", "Very High"))
+# akallfall$risk <- factor(akallfall$risk, levels = c("low", "medium", "high", "veryhigh"), labels = c("Low", "Medium", "High", "Very High"))
+# 
+# risk_pal <- c("#73b2ff", "#55fe01", "#ffff01", "#e31a1c")
+# names(risk_pal) <- levels(akallsumm$risk)
+# 
+# ggplot(akallsumm, aes(x = DensBird, y = AllShip)) +
+#   geom_point(aes(color=risk)) +
+#   scale_color_manual(values = risk_pal) +
+#   scale_x_continuous(trans=scales::pseudo_log_trans(base = 10)) +
+#   scale_y_continuous(trans=scales::pseudo_log_trans(base = 10)) +
+#   theme(text = element_text(size=30))
+# 
+# ggplot(akallfall, aes(x = DensBird, y = AllShip)) +
+#   geom_point(aes(color=risk)) +
+#   scale_color_manual(values = risk_pal) +
+#   scale_x_continuous(trans=scales::pseudo_log_trans(base = 10)) +
+#   scale_y_continuous(trans=scales::pseudo_log_trans(base = 10)) +
+#   theme(text = element_text(size=30))
+# 
