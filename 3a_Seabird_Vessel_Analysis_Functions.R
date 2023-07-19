@@ -347,20 +347,37 @@ summstats <- function(taxaNames,
   #   mutate(relriskcatpostnorm = relriskpostnorm/max(relriskpostnorm))
   
   widedf <- filtdf %>% dplyr::select(hexID, riskcat, subset, taxa) %>% spread(key=subset, value=riskcat)
+  widecont <- filtdf %>% dplyr::select(hexID, riskcont, subset, taxa) %>% spread(key=subset, value=riskcont)
   
-  allvsnightrisk <- data.frame(numhexes = length(widedf$Fall_Night),
+  allvsnightrisk <- data.frame(taxa = taxaLabel, 
+                               studyarea = studyareaname, 
+                               numhexes = length(widedf$Fall_Night),
                                nighthighrisk_Fall = sum(widedf$Fall_Night %in% c("high", "veryhigh")),
                                nighthighrisk_Summer = sum(widedf$Summer_Night %in% c("high", "veryhigh")),
+                               nightcontrisk_Summer_mean = mean(widecont$Summer_Night),
+                               nightcontrisk_Summer_median = median(widecont$Summer_Night),
+                               nightcontrisk_Summer_sd = sd(widecont$Summer_Night),
+                               nightcontrisk_Fall_mean = mean(widecont$Fall_Night),
+                               nightcontrisk_Fall_median = median(widecont$Fall_Night),
+                               nightcontrisk_Fall_sd = sd(widecont$Fall_Night),
+                               
+                               
                                allhighrisk_Fall = sum(widedf$Fall_All %in% c("high", "veryhigh")),
                                allhighrisk_Summer = sum(widedf$Summer_All %in% c("high", "veryhigh")),
+                               allcontrisk_Summer = mean(widecont$Summer_All),
+                               allcontrisk_Summer_median = median(widecont$Summer_All),
+                               allcontrisk_Summer_sd = sd(widecont$Summer_All),
+                               allcontrisk_Fall = mean(widecont$Fall_All),
+                               allcontrisk_Fall_median = median(widecont$Fall_All),
+                               allcontrisk_Fall_sd = sd(widecont$Fall_All),
+                               
+                               
                                nightmorethanall_Fall = sum(widedf$Fall_All < widedf$Fall_Night, na.rm=T), 
                                nightequaltoall_Fall= sum(widedf$Fall_All == widedf$Fall_Night, na.rm=T),
                                nightlessthanall_Fall= sum(widedf$Fall_All > widedf$Fall_Night, na.rm=T),
                                nightmorethanall_Summer = sum(widedf$Summer_All < widedf$Summer_Night, na.rm=T), 
                                nightequaltoall_Summer= sum(widedf$Summer_All == widedf$Summer_Night, na.rm=T),
                                nightlessthanall_Summer= sum(widedf$Summer_All > widedf$Summer_Night, na.rm=T))
-  allvsnightrisk$taxa <- taxaLabel
-  allvsnightrisk$studyarea <- studyareaname 
   
   write.csv(allvsnightrisk, paste0("../Data_Processed/AllVsNightRisk/AllVsNightRisk_",studyareaname, "_", taxaLabel, ".csv" ))
 
@@ -393,6 +410,8 @@ summstats <- function(taxaNames,
   combos <- data.frame(id = 1:4, 
                        season = c("Summer", "Fall", "Summer", "Fall"), 
                        tod = c("All", "All", "Night", "Night"))
+  tod <- c("All", "Night")
+  seasons <- c("Summer","Fall")
 
   basemapnew <- basemap %>% st_crop(st_buffer(st_as_sfc(st_bbox(filtdf)), 10000))
   
@@ -406,8 +425,6 @@ summstats <- function(taxaNames,
   ######################################################### 
   ##################### Risk Plot: Continuous #################
   ######################################################### 
-  tod <- c("All", "Night")
-  season <- c("Summer","Fall")
   
   for(i in 1:2){
     dfnew <- filtdf %>% filter(timeofday == tod[i])
@@ -472,7 +489,7 @@ summstats <- function(taxaNames,
     dfnew <- filtdf %>% filter(timeofday == tod[i])
     riskplotallname <- paste0(figfolder, "Risk_Categorical_", tod[i],"_",taxaLabel, "_", studyareaname, ".png")
     for(j in 1:2){
-      dfsub <- dfnew %>% filter(season == season[j])
+      dfsub <- dfnew %>% filter(season == seasons[j])
       dfsub$riskcat <- factor(dfsub$riskcat, 
                            levels = c("low", "mediumBIRD", "mediumSHIP", "high", "veryhigh"))
       plt <- ggplot() +
@@ -524,7 +541,6 @@ summstats <- function(taxaNames,
   #################################################### 
   ##################### Traffic plot #################
   #################################################### 
-  traffplotname <- paste0(figfolder,"TrafficCombos_", studyareaname,".png")
   
   if(studyareaname %in% c("All Alaska", "Gulf of Alaska", "Eastern Aleutians")){
     br <- c(0,10,100, 1000, 10000, 100000, 100000)
@@ -535,49 +551,57 @@ summstats <- function(taxaNames,
     lims <- c(0,50000)
   }
   
-  for(i in 1:length(combos$id)){
-    dfsub <- filtdf %>% filter(season == combos$season[i] & timeofday == combos$tod[i])
-    plt <- ggplot() +
-      geom_sf(data=box, fill=NA, color=NA,lwd=0) +   
-      geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
-      geom_sf(data=dfsub,aes(fill = AllShip), color="darkgray") +
-      # scale_fill_steps(trans="log",n.breaks=4, low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::comma,
-      #                  name="Total Hours\nof Vessel Traffic", guide = guide_coloursteps(show.limits = TRUE)) +
-      scale_fill_gradientn(colours=cols, trans="pseudo_log", breaks=br, labels=scales::label_comma(),name="Vessel Activity\n(Hours)", na.value="white", limits=lims) +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
-      # labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
-      guides(fill = guide_colourbar(barwidth = 25, 
-                                    barheight = 1, 
-                                    title.hjust = 0.5,
-                                    ticks.colour="black", 
-                                    frame.colour = "black", 
-                                    ticks.linewidth = 0.75)) +
-      theme_bw() +
-      theme(text = element_text(size = 18),
-            axis.ticks=element_blank(), 
-            plot.title = element_text(hjust = 0.5),
-            plot.subtitle = element_text(hjust = 0.5), 
-            plot.caption = element_text(size = 8, hjust=0),
-            axis.text=element_blank(),
-            panel.border =  element_rect(colour = "black"),
-            panel.grid.major = element_line(colour = "transparent")) +
-    ggtitle(paste0(dfsub$season[1], ": ", dfsub$timeofday[1]))
-    assign(paste0("t", i), plt)
+  for(i in 1:2){
+    dfnew <- filtdf %>% filter(timeofday == unique(combos$tod)[i])
+    traffplotname <- paste0(figfolder,"TrafficCombos_", unique(combos$tod)[i],"_", studyareaname,".png")
+    
+    for(j in 1:2){
+      dfsub <- dfnew %>% filter(season == unique(combos$season)[j])
+      plt <- ggplot() +
+        geom_sf(data=box, fill=NA, color=NA,lwd=0) +   
+        geom_sf(data=basemapnew, fill="lightgray", lwd=0) +
+        geom_sf(data=dfsub,aes(fill = AllShip), color="darkgray") +
+        # scale_fill_steps(trans="log",n.breaks=4, low = "yellow", high = "red",nice.breaks=TRUE, labels=scales::comma,
+        #                  name="Total Hours\nof Vessel Traffic", guide = guide_coloursteps(show.limits = TRUE)) +
+        scale_fill_gradientn(colours=cols, trans="pseudo_log", breaks=br, labels=scales::label_comma(),name="Vessel Activity\n(Hours)", na.value="white", limits=lims) +
+        scale_x_continuous(expand = c(0, 0)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        # labs(caption = paste0("*One operating day is equal to one vessel present in a hex on a given day.")) + 
+        guides(fill = guide_colourbar(barwidth = 25, 
+                                      barheight = 1, 
+                                      title.hjust = 0.5,
+                                      ticks.colour="black", 
+                                      frame.colour = "black", 
+                                      ticks.linewidth = 0.75)) +
+        theme_bw() +
+        theme(text = element_text(size = 18),
+              axis.ticks=element_blank(), 
+              plot.title = element_text(hjust = 0.5),
+              plot.subtitle = element_text(hjust = 0.5), 
+              plot.caption = element_text(size = 8, hjust=0),
+              axis.text=element_blank(),
+              panel.border =  element_rect(colour = "black"),
+              panel.grid.major = element_line(colour = "transparent")) +
+      ggtitle(dfsub$season[1])
+      assign(paste0("t", j), plt)
   }
-  traffcombo <- ggarrange(t1, t3, t2, t4, ncol=2, nrow=2, common.legend=TRUE, legend = "bottom")
-  traffcombo <- traffcombo + theme(panel.background = element_rect(fill = "white"))
+    traffcombo <- ggarrange(t1, t2, ncol=2, nrow=1, common.legend=TRUE, legend = "bottom")
+    
+    traffcombo <- traffcombo + theme(panel.background = element_rect(fill = "white"))
+    
   
   # Save figure 
   if(!file.exists(traffplotname)){
     ifelse(studyareaname == "Eastern Aleutians", 
            ggsave(filename=traffplotname, 
                   plot= traffcombo, 
-                  width=12, height=6, units="in"), 
+                  width=12, height=4, units="in"), 
            ggsave(filename=traffplotname, 
                   plot= traffcombo, 
-                  width=12, height=12, units="in"))
+                  width=12, height=6, units="in"))
+    }
   }
+  
   ######################################################### 
   ##################### Bird density plot #################
   ######################################################### 
