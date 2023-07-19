@@ -20,35 +20,79 @@ hexMask <- st_read("../Data_Raw/hex_x_ocean/hex_x_ocean.shp") %>%
   select(hexID) %>%
   mutate(AreaKM = c(st_area(.)/1000000)) 
 
+
+
+filelist <- list.files("../Data_Processed/AllVsNightRisk/", pattern="AllVsNight", full.names=T)
+
+files <- lapply(filelist, read.csv)
+hexes <- do.call(rbind, files)
+write.csv(hexes, "../Data_Processed/Master_AllVsNightRisk.csv")
+
+hexes$pct_hi_summ_all <- round(hexes$allhighrisk_Summer/hexes$numhexes*100,2)
+hexes$pct_hi_summ_night <- round(hexes$nighthighrisk_Summer/hexes$numhexes*100,2)
+
+hexes$pct_hi_fall_all <- round(hexes$allhighrisk_Fall/hexes$numhexes*100,2)
+hexes$pct_hi_fall_night <- round(hexes$nighthighrisk_Fall/hexes$numhexes*100,2)
+
+h <- hexes %>% select(pct_hi_summ_all, pct_hi_summ_night, pct_hi_fall_all, pct_hi_fall_night, taxa, studyarea) %>% gather(key=subset,value=riskpct, -taxa, -studyarea)
+
+test <- strsplit(h$subset,split = "_")
+h$season <- sapply(test, "[[", 3)
+h$timefdy <-  sapply(test, "[[", 4)
+
+h$taxa <- factor(h$taxa, 
+                 levels = c("Total Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels"),
+                 labels = c("Total Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels"))
+h$season <- factor(h$season, levels = c("summ", "fall"), labels = c("Summer", "Fall"))
+##################################################
+
+############################################
+hnight <- h %>% filter(timefdy == "night", taxa == "Total Seabirds")
+
+p <- ggplot(hnight, aes(x=season, y=riskpct)) +
+  geom_bar(position="dodge", stat="identity") +
+  # scale_fill_manual(values=c("all" = "#fee227", 
+  #                            "night" = "#191970"), 
+  #                   labels = c("All", "Night Only"),
+  #                   name="Vessel Traffic") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  facet_wrap(~studyarea) + 
+  ylab("Percent of Study Area at High or Very High Risk") + 
+  xlab("") +
+  theme_bw() + 
+  theme(text = element_text(size=20))
+p
+ggsave(filename = paste0("../Figures/RiskBarGraph_TotalSeabirds_Night_ByRegion.png"),
+       plot = p, width=10, height=8, units="in")
+
+
+hall <- h %>% filter(taxa == "Total Seabirds")
+
+p <- ggplot(hall, aes(x=season, y=riskpct, fill=timefdy)) +
+  geom_bar(position="dodge", stat="identity") +
+  scale_fill_manual(values=c("all" = "#fee227",
+                             "night" = "#191970"),
+                    labels = c("All", "Night Only"),
+                    name="Vessel Traffic") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  facet_wrap(~studyarea) + 
+  ylab("Percent of Study Area at High or Very High Risk") + 
+  xlab("") +
+  theme_bw() + 
+  theme(text = element_text(size=20))
+p
+ggsave(filename = paste0("../Figures/RiskBarGraph_TotalSeabirds_ByRegion.png"),
+       plot = p, width=12, height=8, units="in")
+
+##################################################
 # List of regions 
 loclist <- c("Northern Bering & Chukchi Seas", "Gulf of Alaska", "All Alaska", "Eastern Aleutians")
 
 for(i in 1:length(loclist)){
+  hnew <- h %>% filter(studyarea == loclist[[i]])
 
-  filelist <- list.files("../Data_Processed/AllVsNightRisk/", pattern=loclist[i], full.names=T)
   
-  files <- lapply(filelist, read.csv)
-  hexes <- do.call(rbind, files)
-  
-  
-  hexes$pct_hi_summ_all <- round(hexes$allhighrisk_Summer/hexes$numhexes*100,2)
-  hexes$pct_hi_summ_night <- round(hexes$nighthighrisk_Summer/hexes$numhexes*100,2)
-  
-  hexes$pct_hi_fall_all <- round(hexes$allhighrisk_Fall/hexes$numhexes*100,2)
-  hexes$pct_hi_fall_night <- round(hexes$nighthighrisk_Fall/hexes$numhexes*100,2)
-  
-  h <- hexes %>% select(pct_hi_summ_all, pct_hi_summ_night, pct_hi_fall_all, pct_hi_fall_night, taxa) %>% gather(key=subset,value=riskpct, -taxa)
-  
-  test <- strsplit(h$subset,split = "_")
-  h$season <- sapply(test, "[[", 3)
-  h$timefdy <-  sapply(test, "[[", 4)
-  
-  h$taxa <- factor(h$taxa, 
-                   levels = c("Total Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels"),
-                   labels = c("Total Seabirds", "Auklets", "Northern Fulmars", "Seaducks", "Shearwaters", "Storm Petrels"))
-  h$season <- factor(h$season, levels = c("summ", "fall"), labels = c("Summer", "Fall"))
-  
-  p <- ggplot(h, aes(x=season, y=riskpct, fill=timefdy)) +
+  p <- ggplot(hnew, aes(x=season, y=riskpct, fill=timefdy)) +
     geom_bar(position="dodge", stat="identity") +
     scale_fill_manual(values=c("all" = "#fee227", 
                                "night" = "#191970"), 
@@ -100,10 +144,10 @@ for(i in 1:length(loclist)){
       geom_sf(data=box, fill=NA, color=NA,lwd=0) +      
       geom_sf(data=basemapnew, fill="lightgray",lwd=0) +
       geom_sf(data=tnew,aes(fill = n), color="darkgray") +
-      scale_fill_manual(values = c("1" = "#9bdbbd",
-                                   "2" = "#1cbcae",
-                                   "3" = "#005d9d",
-                                   "4" = "#281863"),
+      scale_fill_manual(values = c("1" = "#ffae52",
+                                   "2" = "#a83b00",
+                                   "3" = "#281863",
+                                   "4" = "black"),
                         na.value = "white",
                         name="Number of Taxa", 
                         drop=F) +
@@ -153,10 +197,10 @@ for(i in 1:length(loclist)){
       geom_sf(data=box, fill=NA, color=NA,lwd=0) +      
       geom_sf(data=basemapnew, fill="lightgray",lwd=0) +
       geom_sf(data=tnew,aes(fill = n), color="darkgray") +
-      scale_fill_manual(values = c("1" = "#9bdbbd",
-                                   "2" = "#1cbcae",
-                                   "3" = "#005d9d",
-                                   "4" = "#281863"),
+      scale_fill_manual(values = c("1" = "#ffae52",
+                                   "2" = "#a83b00",
+                                   "3" = "#281863",
+                                   "4" = "black"),
                         na.value = "white",
                         name="Number of Taxa", 
                         drop=F) +
@@ -193,6 +237,7 @@ for(i in 1:length(loclist)){
   }
   
 }
+
 
 # hall <- h %>% filter(timefdy == "all")
 # 
