@@ -7,7 +7,8 @@ den1list <- c()
 den2list <- c()
 
 for(i in 1:nsamples){
-  sobs <- data.frame(sample_area = runif(1000, 0.7, 0.9),
+  # sobs <- data.frame(sample_area = runif(1000, 0.7, 0.9),
+  sobs <- data.frame(sample_area = rep(0.9, nsamples),
                      nbirds = rnbinom(nsamples, 10, .5))
   
   den1 <- sum(sobs$nbirds)/sum(sobs$sample_area) # total estimates 
