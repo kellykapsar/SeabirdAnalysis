@@ -151,20 +151,17 @@ for(i in 1:length(loclist)){
                         na.value = "white",
                         name="Number of Taxa", 
                         drop=F) +
-      xlab("") +
-      ylab("") +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
+      scale_x_longitude(ticks = 5, expand = c(0, 0)) +
+      scale_y_latitude(ticks = 5, expand = c(0, 0)) +
       theme_bw() +
       theme(text = element_text(size = 18),
             plot.title = element_text(hjust = 0.5),
             plot.subtitle = element_text(hjust = 0.5),
             plot.caption = element_text(size = 8, hjust=0),
-            axis.ticks = element_blank(),
-            axis.text=element_blank(),
+            plot.margin = margin(t=0.5, r=0.5, b=0.5, l=0.5, unit="cm"),
+            # panel.background = element_rect(fill = "#73b2ff"),
             panel.border =  element_rect(colour = "black"),
-            panel.grid.major = element_line(colour = "transparent"), 
-            panel.background = element_rect(fill = "white")) +
+            axis.text = element_text(colour = "darkgray", size=8)) +
       ggtitle(paste0(t$season[1]))
     assign(paste0("p", j), plt)
   }
@@ -204,20 +201,17 @@ for(i in 1:length(loclist)){
                         na.value = "white",
                         name="Number of Taxa", 
                         drop=F) +
-      xlab("") +
-      ylab("") +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
+      scale_x_longitude(ticks = 5, expand = c(0, 0)) +
+      scale_y_latitude(ticks = 5, expand = c(0, 0)) +
       theme_bw() +
       theme(text = element_text(size = 18),
             plot.title = element_text(hjust = 0.5),
             plot.subtitle = element_text(hjust = 0.5),
             plot.caption = element_text(size = 8, hjust=0),
-            axis.ticks = element_blank(),
-            axis.text=element_blank(),
+            plot.margin = margin(t=0.5, r=0.5, b=0.5, l=0.5, unit="cm"),
+            # panel.background = element_rect(fill = "#73b2ff"),
             panel.border =  element_rect(colour = "black"),
-            panel.grid.major = element_line(colour = "transparent"), 
-            panel.background = element_rect(fill = "white")) +
+            axis.text = element_text(colour = "darkgray", size=8)) +
       ggtitle(paste0(t$season[1]))
     assign(paste0("p", k), plt)
   }
