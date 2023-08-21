@@ -1,8 +1,5 @@
-# Seabird-Vessel Traffic Risk Assessment
+# Seabird-Vessel Traffic Risk Analysis
 
-## Repo structure:
-* `0_HexGridCreation.R`
-* `1_AIS_Hexes_2015.R`- clean and spatially intersect 2015-2020 vessel traffic data with hex grid
-* `1_AIS_Hexes_2021.R`- clean and spatially intersect 2021-2022 vessel traffic data with hex grid
-* `2_AIS_Metadata_OutputSummaries.R` - summarize vessel traffic patterns in the study area
-* `2b_
+**NOTE: THIS REPOSITORY IS NOT LONGER FUNCTIONAL. A NEWER VERSION CAN BE FOUND AT https://github.com/kellykapsar/SeabirdVesselTraffic**  
+
+I have decided to keep this repository up and running for educational purposes to demonstrate how using Make-like tools can help researchers to organize and automate research workflows. This repository has minimal organization and became overly complex as research questions changed. It also became extremely difficult to keep track of cascading consequences of changes early on in the workflow. Through a side-by-side demonstration of these two workflows I am able to show how the improvements in the code structure increased the reproducibility and versatility of the analysis. 
