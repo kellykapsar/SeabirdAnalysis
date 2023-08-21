@@ -65,24 +65,25 @@ birdDensity <- function(loc, datobs, hex, startyr, mnths, survfilename){
   sppNout <- as.list(NA)
   
   # Iterate through each spp and calculate number of observations per hex
-  # for (i in 1:length(birdNames)){
-  #   obsIn2 <- obsIn[obsIn$species_code==birdNames[i],]
-  #    temp <- obsIn2 %>%
-  #     group_by(hexID, master_key) %>%
-  #     summarize(nBirds = sum(number), sample_area = first(sample_area)) %>%
-  #     as.data.frame()
-  #   sppNout[[i]] <- temp %>% 
-  #     group_by(hexID) %>% 
-  #     summarize(birdDen = sum(nBirds)/sum(sample_area))
-  #   names(sppNout[[i]]) <- c("hexID",birdNames[i])
-  # }
   for (i in 1:length(birdNames)){
     obsIn2 <- obsIn[obsIn$species_code==birdNames[i],]
-    sppNout[[i]] <- obsIn2 %>% 
-      group_by(hexID) %>% 
-      summarize(AllBird = sum(number))
+    temp <- obsIn2 %>%
+      group_by(hexID, master_key) %>%
+      summarize(nBirds = sum(number), sample_area = first(sample_area)) %>%
+      as.data.frame()
+    # sppNout[[i]] <- temp %>%
+    test<- temp %>%
+      group_by(hexID) %>%
+      summarize(birdDen = sum(nBirds)/sum(sample_area))
     names(sppNout[[i]]) <- c("hexID",birdNames[i])
   }
+  # for (i in 1:length(birdNames)){
+  #   obsIn2 <- obsIn[obsIn$species_code==birdNames[i],]
+  #   sppNout[[i]] <- obsIn2 %>% 
+  #     group_by(hexID) %>% 
+  #     summarize(AllBird = sum(number))
+  #   names(sppNout[[i]]) <- c("hexID",birdNames[i])
+  # }
   
   
   for (j in 1:length(birdNames)){
@@ -211,7 +212,8 @@ birdHexesByEffort <- function(dataobs,
       select(hexID,AllBird,survEff,AreaKM)
 
     # Calculate effort-weighted densities of seabirds (# birds per square km of surveyed area)
-    birdFinal <- birdStacked %>% mutate(DensBird = AllBird/survEff)
+    # birdFinal <- birdStacked %>% mutate(DensBird = AllBird/survEff)
+    birdFinal <- birdStacked %>% mutate(DensBird = AllBird)
     
     # Calculate SD categories for each hex's effort-weighted seabird observations
     birdFinal <- birdFinal %>%
@@ -285,7 +287,12 @@ summstats <- function(taxaNames,
   
   df <- df %>% dplyr::select(-ClassBird, -QuantBird, -ClassShip, -QuantShip, -risk)
   
-  bothseasons <- df %>% st_drop_geometry() %>% group_by(hexID) %>% summarize(n=n()) %>% filter(n == 6)
+  bothseasons <- df %>% 
+    st_drop_geometry() %>% 
+    filter(timeofday == "All") %>% 
+    group_by(hexID) %>% 
+    summarize(n=n()) %>% 
+    filter(n == 2)
   
   subdf <- df %>% filter(hexID %in% bothseasons$hexID) %>% mutate(subset = paste0(season, "_", timeofday))
   

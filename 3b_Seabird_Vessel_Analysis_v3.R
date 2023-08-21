@@ -169,7 +169,7 @@ source("./3a_Seabird_Vessel_Analysis_Functions.R")
 #                                                            filedir=hexList,
 #                                                            metric=metric,
 #                                                            timeofday=timeofday)})
-#   ## GULF OF ALASKA
+# #   ## GULF OF ALASKA
 #   lapply(1:length(AllAKList), function(x){birdHexesByEffort(taxaNames= AllAKList[[x]],
 #                                                            taxaLabel= names(AllAKList[x]),
 #                                                            hexMask=hexMask,
